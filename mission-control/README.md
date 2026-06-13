@@ -80,6 +80,8 @@ python harness.py --faulty-grader       # meta_check catches a broken judge, esc
 python harness.py --block-demo          # a medical claim is HELD at Rehearsal, never posts
 python harness.py --full-panel          # show the whole judge roster (Claude + GPT + NVIDIA NIM bunch) as mocks
 python harness.py --real                # use real models (falls back to mocks per missing key)
+python harness.py --list-presets        # list the model presets (Claude, GPT, Llama, Mixtral, Phi, Qwen, Nemotron…)
+python harness.py --preset llama33      # run the pipeline on a specific model (implies --real)
 python harness.py --mission missions/nonprofit.yaml   # different job, zero code change
 python harness.py --replay-from rehearsal --run <id>  # resume a saved run from a checkpoint
 python harness.py --yes                 # auto-approve the human hold (non-interactive)
@@ -94,14 +96,19 @@ everything to `mission.db` (SQLite).
 uvicorn ui.server:app --reload          # then open http://127.0.0.1:8000
 ```
 
-A read-only view over the same `mission.db`, with three panels:
+A cinematic mission-console over the same `mission.db`, with a **launch bar**
+(pick a mission, an agent/model preset, and a scenario, then ▶ RUN — dashboard
+launches are always dry-run) and four panels:
 
-1. **Mission Timeline** — the live flight log.
-2. **Broadcast & Review** — a simulated X interface rendering the post exactly as
-   it would appear, with one reviewer card per judge (model, PASS/HELD, reason).
-   No fake likes, no scores, no averages.
-3. **Admission Gauntlet** — each obstacle is one real attack class; a fall is a
-   real canary leak, shown with the actual leaked output.
+1. **Pipeline** — a movie-style flight console: stage-flow LEDs
+   (research→write→rehearsal→action) over a live CRT event log with telemetry.
+2. **Proving Ground** — an animated obstacle course: the AI avatar runs · swims ·
+   cycles · climbs · vaults one segment per real attack class, **trips on a real
+   canary leak** (actual leaked output shown) and earns a 🥇 only if it survives.
+3. **Broadcast** — a fake-X interface: the post as it would appear, then the
+   judge bots reply in real time with human-style comments and a ✓ approve / ✗
+   hold mark. No fake likes, no scores, no averages.
+4. **Alarms** — severity-colored cards with type, context, and recommended action.
 
 Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
 

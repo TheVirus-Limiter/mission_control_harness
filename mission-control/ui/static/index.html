@@ -3,396 +3,457 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mission Control</title>
+<title>MISSION CONTROL</title>
 <style>
-  :root{
-    --bg:#080b11; --panel:#0f1620; --panel2:#0b121b; --line:#1e2a3a;
-    --ink:#e8eef5; --dim:#9fb0c3; --faint:#6f8197;
-    --accent:#39c0ed; --accent2:#7c5cff;
-    --go:#3fb950; --nogo:#f85149; --held:#e3a008;
-    --crit:#ff5c5c; --high:#f85149; --med:#d8a531;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0}
-  body{background:var(--bg);color:var(--ink);
-    font:13.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  a{color:var(--accent)}
+:root{
+  --bg:#05080d; --bg2:#070c14; --panel:#0a121c; --panel2:#0b1320; --line:#16314a;
+  --ink:#d7f0ff; --dim:#7fa6c4; --faint:#577693;
+  --phos:#39d98a; --amber:#ffb454; --cyan:#46d6ff; --violet:#9a7cff;
+  --go:#2fe08a; --nogo:#ff5a6a; --held:#ffc04a; --crit:#ff5a6a;
+  --x-blue:#1d9bf0;
+  --run:#ff8a3d; --swim:#2aa9ff; --cycle:#36d97a; --climb:#c08a5a; --vault:#b07bff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:13px/1.5 ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
+body{position:relative;overflow-x:hidden}
+/* CRT scanline + vignette overlay */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.16) 3px);
+  mix-blend-mode:multiply;opacity:.5}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:51;
+  background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.55) 100%)}
+::selection{background:var(--cyan);color:#022}
+button,select,input{font:inherit}
 
-  /* ---- header ---- */
-  header{position:sticky;top:0;z-index:5;border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg,#0c131d,#080b11)}
-  .bar{display:flex;align-items:center;gap:14px;padding:12px 20px}
-  .logo{font-weight:700;letter-spacing:.16em;color:var(--accent);white-space:nowrap}
-  .logo small{color:var(--faint);font-weight:400;letter-spacing:.05em}
-  .bar .spacer{flex:1}
-  select,button{background:var(--panel);color:var(--ink);border:1px solid var(--line);
-    border-radius:8px;padding:7px 11px;font:inherit;cursor:pointer;transition:.15s}
-  button:hover,select:hover{border-color:var(--accent)}
-  button.primary{background:var(--accent);color:#04222b;border-color:var(--accent);font-weight:700}
-  button.ghost{background:transparent}
-  button.danger{border-color:#7a2c2c;color:#ff9c9c}
-  button:disabled{opacity:.45;cursor:not-allowed}
-  .conn{font-size:11px;color:var(--go)} .conn.down{color:var(--nogo)}
+/* ---------- header / command bar ---------- */
+header{position:sticky;top:0;z-index:10;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#081019,#05080d);box-shadow:0 0 22px rgba(0,40,70,.5)}
+.bar{display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
+.brand{font-weight:800;letter-spacing:.26em;color:var(--cyan);text-shadow:0 0 12px rgba(70,214,255,.6);white-space:nowrap}
+.brand small{color:var(--faint);font-weight:400;letter-spacing:.1em}
+.bar .sp{flex:1}
+.ctl{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;padding:4px 6px}
+.ctl label{color:var(--faint);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+select,.btn{background:#0c1726;color:var(--ink);border:1px solid var(--line);border-radius:6px;
+  padding:6px 9px;cursor:pointer;transition:.15s}
+select:hover,.btn:hover{border-color:var(--cyan)}
+.btn.run{background:linear-gradient(180deg,#103b2c,#0c2a20);border-color:#1f7d57;color:var(--phos);
+  font-weight:800;letter-spacing:.08em;text-shadow:0 0 8px rgba(47,224,138,.6)}
+.btn.run:hover{box-shadow:0 0 16px rgba(47,224,138,.35)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.conn{font-size:11px;color:var(--phos)} .conn.down{color:var(--nogo)}
+.toggle{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.toggle button{background:#0c1726;border:none;color:var(--dim);padding:6px 10px;cursor:pointer;font-size:11px}
+.toggle button.on{background:#10314a;color:var(--cyan)}
 
-  /* readout strip */
-  .readout{display:flex;gap:18px;flex-wrap:wrap;padding:0 20px 11px;color:var(--dim);font-size:12px}
-  .readout b{color:var(--ink)}
-  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-  .dot.go{background:var(--go)} .dot.run{background:var(--accent);animation:pulse 1.4s infinite}
-  .dot.nogo{background:var(--nogo)} .dot.held{background:var(--held)}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* readout strip */
+.readout{display:flex;gap:16px;flex-wrap:wrap;padding:0 16px 9px;color:var(--dim);font-size:11px}
+.readout b{color:var(--ink)}
+.led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 8px}
+.led.go{background:var(--go);box-shadow:0 0 8px var(--go)} .led.run{background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:blink 1.2s infinite}
+.led.nogo{background:var(--nogo);box-shadow:0 0 8px var(--nogo)} .led.held{background:var(--held);box-shadow:0 0 8px var(--held)}
+@keyframes blink{50%{opacity:.25}}
 
-  /* ---- tabs ---- */
-  nav{display:flex;gap:4px;padding:10px 20px 0;flex-wrap:wrap}
-  .tab{padding:9px 16px;border:1px solid var(--line);border-bottom:none;
-    border-radius:9px 9px 0 0;background:var(--panel2);color:var(--dim);font:inherit;cursor:pointer}
-  .tab[aria-selected="true"]{background:var(--panel);color:var(--ink);border-color:var(--accent)}
-  .tab .pill{display:inline-block;margin-left:7px;min-width:18px;padding:0 5px;border-radius:9px;
-    font-size:11px;background:#22150c;color:var(--med);border:1px solid #6b4f12}
-  .tab .pill.crit{background:#2a0e0e;color:var(--crit);border-color:#7a2020}
-  main{padding:16px 20px 70px}
-  .view{display:none} .view.active{display:block}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  h2{font-size:12px;letter-spacing:.07em;color:var(--dim);text-transform:uppercase;margin:0 0 12px}
-  .empty{color:var(--faint);padding:28px;text-align:center}
+/* tabs */
+nav{display:flex;gap:3px;padding:8px 16px 0;flex-wrap:wrap}
+.tab{padding:9px 16px;border:1px solid var(--line);border-bottom:none;border-radius:8px 8px 0 0;
+  background:#070f18;color:var(--dim);cursor:pointer;letter-spacing:.06em}
+.tab[aria-selected=true]{background:var(--panel);color:var(--cyan);border-color:var(--cyan);
+  box-shadow:0 -2px 14px rgba(70,214,255,.18)}
+.tab .pill{margin-left:7px;font-size:10px;padding:0 6px;border-radius:9px;background:#3a2208;color:var(--amber);border:1px solid #6b4f12}
+.tab .pill.crit{background:#3a0e10;color:var(--crit);border-color:#7a2030}
+main{padding:14px 16px 80px}
+.view{display:none}.view.active{display:block}
 
-  /* ---- timeline ---- */
-  .filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
-  .chip{padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel2);
-    color:var(--dim);font-size:12px;cursor:pointer}
-  .chip.on{border-color:var(--accent);color:var(--ink)}
-  table{width:100%;border-collapse:collapse}
-  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
-  th{color:var(--faint);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-  tbody tr:hover{background:#0c1521}
-  td.seq{color:var(--faint);width:38px} td.stg{color:var(--accent2);width:96px}
-  td.tm{color:var(--faint);width:64px;font-size:12px}
-  .st{display:inline-block;min-width:72px;text-align:center;padding:2px 8px;border-radius:6px;
-    font-size:11px;font-weight:800;letter-spacing:.03em}
-  .st.go{background:#0e2716;color:#56d364;border:1px solid #1f6f33}
-  .st.nogo{background:#2a0e0e;color:#ff7b72;border:1px solid #7a2020}
-  .st.held{background:#2a2207;color:var(--held);border:1px solid #7a5a07}
-  .st.accent{background:#06222b;color:var(--accent);border:1px solid #1d5a6b}
-  .st.crit{background:#2a0e0e;color:var(--crit);border:1px solid #7a2020}
-  .st.high{background:#2a0e0e;color:#ff7b72;border:1px solid #7a2020}
-  .st.med{background:#22150c;color:var(--med);border:1px solid #6b4f12}
-  .st.muted{background:transparent;color:var(--faint);border:1px solid var(--line)}
-  .rowmeta{color:var(--faint);font-size:12px;margin-top:2px}
-  tr.r-nogo td,tr.r-crit td,tr.r-high td{background:rgba(248,81,73,.05)}
+/* HUD framed panel */
+.hud{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.hud::before,.hud::after{content:"";position:absolute;width:14px;height:14px;border:2px solid var(--cyan);opacity:.6}
+.hud::before{top:-1px;left:-1px;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
+.hud::after{bottom:-1px;right:-1px;border-left:none;border-top:none;border-radius:0 0 6px 0}
+h2{font-size:11px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase;margin:0 0 12px}
+.empty{color:var(--faint);padding:26px;text-align:center}
 
-  /* ---- broadcast ---- */
-  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-  .proof{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;
-    border:1px solid #1d5a6b;background:#06222b;border-radius:8px;color:var(--accent);font-size:12px}
-  .xpost{max-width:560px}
-  .xhead{display:flex;align-items:center;gap:11px;margin-bottom:9px}
-  .avatar{width:44px;height:44px;border-radius:50%;flex:none;
-    background:linear-gradient(135deg,var(--accent),var(--accent2))}
-  .xid{display:flex;flex-direction:column;line-height:1.25;min-width:0}
-  .xname{font-weight:700;font-family:system-ui,Segoe UI,sans-serif;display:flex;align-items:center;gap:5px}
-  .xverify{color:var(--accent)}
-  .xhandle{color:var(--dim);font-size:13px}
-  .flag{margin-left:auto;font-weight:800;font-size:11px;padding:3px 9px;border-radius:6px;letter-spacing:.04em}
-  .flag.dry{color:var(--med);border:1px solid #7a5a07;background:#22150c}
-  .flag.live{color:var(--nogo);border:1px solid #7a2020;background:#2a0e0e}
-  .flag.staged{color:var(--dim);border:1px solid var(--line)}
-  .flag.down{color:var(--held);border:1px solid #7a5a07}
-  .xtext{font-size:17px;line-height:1.5;white-space:pre-wrap;font-family:system-ui,Segoe UI,sans-serif;
-    margin:2px 0 4px}
-  .xtext .tag{color:var(--accent)}
-  .xactions{display:flex;gap:28px;align-items:center;margin-top:13px;padding-top:11px;
-    border-top:1px solid var(--line);color:var(--faint);font-size:16px}
-  .cc{margin-left:auto;font-size:12px;color:var(--dim)} .cc.over{color:var(--nogo);font-weight:700}
-  .act-row{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
-  .blocked{border:1px solid var(--nogo);background:#170a0a;border-radius:12px;padding:18px}
-  .blocked .b-no{color:var(--nogo);font-weight:800;letter-spacing:.07em;font-size:15px;margin-bottom:8px}
-  .blocked .b-why{color:var(--ink);margin-bottom:8px} .blocked .b-rec{color:var(--dim);font-size:13px}
-  .awaiting{border:1px solid #7a5a07;background:#1c1606;border-radius:10px;padding:12px;margin-bottom:12px}
-  .awaiting b{color:var(--held)}
+/* ---------- PIPELINE / console ---------- */
+.flow{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.node{flex:1;min-width:110px;border:1px solid var(--line);border-radius:9px;padding:11px;background:var(--panel2);position:relative}
+.node .nm{font-size:10px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
+.node .big{font-size:15px;margin-top:5px;color:var(--dim)}
+.node.done{border-color:#1f7d57;box-shadow:0 0 14px rgba(47,224,138,.18)} .node.done .big{color:var(--go)}
+.node.active{border-color:var(--cyan);box-shadow:0 0 16px rgba(70,214,255,.3)} .node.active .big{color:var(--cyan)}
+.node.fail{border-color:#7a2030} .node.fail .big{color:var(--nogo)}
+.node .arrow{position:absolute;right:-12px;top:50%;color:var(--faint);z-index:1}
+.console{background:#04070b;border:1px solid var(--line);border-radius:8px;padding:10px 12px;
+  max-height:60vh;overflow:auto;font-size:12.5px}
+.ln{display:grid;grid-template-columns:58px 96px 80px 1fr;gap:8px;padding:2px 0;border-bottom:1px solid #0c1420}
+.ln .tm{color:var(--faint)} .ln .sg{color:var(--violet)}
+.ln .stt{font-weight:800;letter-spacing:.04em}
+.s-go{color:var(--go)} .s-nogo{color:var(--nogo)} .s-held{color:var(--held)} .s-amber{color:var(--amber)}
+.s-cyan{color:var(--cyan)} .s-dim{color:var(--faint)}
+.ln .tx{color:var(--ink)} .ln .mt{color:var(--faint);font-size:11px}
+.ln.bad{background:rgba(255,90,106,.06)} .ln.alarm{background:rgba(255,90,106,.09)}
+.cursor::after{content:"▋";color:var(--phos);animation:blink 1s steps(1) infinite}
+.filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.chip{padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:#0a1622;color:var(--dim);cursor:pointer;font-size:11px}
+.chip.on{border-color:var(--cyan);color:var(--cyan)}
 
-  .consent{display:inline-block;padding:4px 11px;border-radius:999px;font-size:12px;font-weight:700;margin-bottom:11px}
-  .consent.go{background:#0e2716;color:#56d364;border:1px solid #1f6f33}
-  .consent.hold{background:#2a2207;color:var(--held);border:1px solid #7a5a07}
-  .reviewers{display:flex;flex-direction:column;gap:10px}
-  .rev{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2)}
-  .rev .top{display:flex;align-items:center;gap:9px;margin-bottom:7px;flex-wrap:wrap}
-  .rev .model{font-weight:700} .src{font-size:10px;padding:1px 6px;border-radius:5px;border:1px solid var(--line);color:var(--dim)}
-  .src.anthropic{color:#d98c5f;border-color:#5a3d2a} .src.openai{color:#74c69d;border-color:#2c5a44}
-  .src.nvidia{color:#9fd356;border-color:#4a6b1f}
-  .vbadge{margin-left:auto;font-size:11px;font-weight:800;padding:2px 9px;border-radius:6px}
-  .vbadge.pass{background:#0e2716;color:#56d364;border:1px solid #1f6f33}
-  .vbadge.held{background:#2a2207;color:var(--held);border:1px solid #7a5a07}
-  .rev .reason{color:var(--dim);font-size:13px;margin-bottom:7px}
-  .crits{display:flex;gap:6px;flex-wrap:wrap}
-  .crit-chip{font-size:11px;padding:1px 8px;border-radius:999px;border:1px solid}
-  .crit-chip.pass{color:#56d364;border-color:#1f6f33} .crit-chip.fail{color:var(--nogo);border-color:#7a2020}
-  .note{color:var(--faint);font-size:12px;margin-top:11px}
+/* ---------- GAUNTLET ---------- */
+.gtitle{color:var(--dim);font-size:12px;margin-bottom:12px}
+.track{position:relative;margin:0 0 20px;border:1px solid var(--line);border-radius:12px;
+  background:linear-gradient(180deg,#0a1018,#070d14);overflow:hidden}
+.track .head{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.track .who{font-weight:800;letter-spacing:.03em} .track .vend{font-size:10px;color:var(--faint)}
+.track .verdict{margin-left:auto;font-weight:900;letter-spacing:.08em;padding:3px 12px;border-radius:7px;border:2px solid}
+.verdict.ok{color:var(--go);border-color:var(--go);text-shadow:0 0 10px rgba(47,224,138,.5)}
+.verdict.no{color:var(--nogo);border-color:var(--nogo)}
+.course{position:relative;display:flex;height:128px}
+.seg{flex:1;position:relative;border-right:2px dashed rgba(255,255,255,.12);display:flex;
+  flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:8px;overflow:hidden}
+.seg:last-child{border-right:none}
+.seg .disc{position:absolute;top:8px;font-size:18px;opacity:.55}
+.seg .lbl{font-size:9.5px;letter-spacing:.04em;color:#cfe8ff;text-align:center;text-transform:uppercase;
+  background:rgba(0,0,0,.35);padding:2px 4px;border-radius:4px;max-width:96%}
+.seg .mark{position:absolute;top:36px;font-size:15px;opacity:0;transition:opacity .3s}
+.seg.cleared .mark{opacity:1} .seg.cleared{}
+.seg.fell{background:rgba(255,90,106,.12)} .seg.fell .mark{opacity:1}
+.seg.d-run{background:linear-gradient(180deg,rgba(255,138,61,.10),transparent)}
+.seg.d-swim{background:linear-gradient(180deg,rgba(42,169,255,.12),transparent)}
+.seg.d-cycle{background:linear-gradient(180deg,rgba(54,217,122,.10),transparent)}
+.seg.d-climb{background:linear-gradient(180deg,rgba(192,138,90,.12),transparent)}
+.seg.d-vault{background:linear-gradient(180deg,rgba(176,123,255,.12),transparent)}
+.ground{position:absolute;left:0;right:0;bottom:0;height:5px;background:linear-gradient(90deg,#1a3550,#0d2236)}
+.finish{position:absolute;right:6px;top:0;bottom:0;width:14px;
+  background:repeating-linear-gradient(45deg,#fff 0 6px,#111 6px 12px);opacity:.5}
+.avatar{position:absolute;bottom:11px;left:0;font-size:26px;transition:left .8s cubic-bezier(.4,.05,.3,1),transform .4s;
+  filter:drop-shadow(0 0 8px rgba(70,214,255,.5));z-index:3;will-change:left}
+.avatar.tripped{transform:translateY(10px) rotate(82deg)}
+.medal{position:absolute;right:18px;bottom:30px;font-size:40px;opacity:0;transform:scale(.3) rotate(-25deg);
+  transition:.6s cubic-bezier(.2,1.4,.4,1);z-index:4}
+.medal.show{opacity:1;transform:scale(1) rotate(0)}
+.leakrow{padding:8px 14px;border-top:1px solid var(--line)}
+.leakrow .lk{font-size:11px;color:#ffb6bd;background:#180809;border:1px dashed #7a2030;border-radius:6px;
+  padding:7px;white-space:pre-wrap;word-break:break-word}
+.replay{cursor:pointer;color:var(--cyan);font-size:11px;border:1px solid var(--line);border-radius:6px;padding:3px 9px;background:#0a1622}
 
-  /* ---- alarms ---- */
-  .alarm{border-left:4px solid;border-radius:8px;padding:13px 14px;margin-bottom:11px;background:var(--panel2)}
-  .alarm.crit{border-color:var(--crit)} .alarm.high{border-color:var(--high)} .alarm.med{border-color:var(--med)}
-  .alarm .atop{display:flex;align-items:center;gap:9px;margin-bottom:5px}
-  .alarm .sev{text-transform:uppercase;font-size:10px;letter-spacing:.1em;padding:1px 7px;border-radius:5px;font-weight:800}
-  .alarm.crit .sev{background:#2a0e0e;color:var(--crit)} .alarm.high .sev{background:#2a0e0e;color:#ff7b72}
-  .alarm.med .sev{background:#22150c;color:var(--med)}
-  .alarm .atype{font-weight:800;letter-spacing:.03em}
-  .alarm .actx{color:var(--ink);margin-bottom:6px}
-  .alarm .arec{color:var(--dim);font-size:13px} .alarm .arec::before{content:"▸ ";color:var(--accent)}
-  .alarm .afail{margin-top:7px;font-size:12px;color:#ffb3b3}
+/* ---------- BROADCAST / fake X ---------- */
+.xwrap{max-width:600px;margin:0 auto}
+.xcard{background:#0a0f14;border:1px solid #1c2a36;border-radius:0}
+.xtop,.reply{padding:14px 16px;border-bottom:1px solid #16222e}
+.xrow{display:flex;gap:11px}
+.av{width:44px;height:44px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:20px;font-weight:800;color:#031;background:linear-gradient(135deg,var(--cyan),var(--violet))}
+.av.anthropic{background:linear-gradient(135deg,#d98c5f,#b5613a)} .av.openai{background:linear-gradient(135deg,#10a37f,#0c7c61)}
+.av.meta{background:linear-gradient(135deg,#3b7cff,#1f4fd0);color:#fff} .av.mistral{background:linear-gradient(135deg,#ff7000,#ff3d00);color:#fff}
+.av.microsoft{background:linear-gradient(135deg,#7fd13b,#3aa10b);color:#031} .av.qwen{background:linear-gradient(135deg,#a35bff,#6a2cd0);color:#fff}
+.av.nvidia{background:linear-gradient(135deg,#76b900,#4f7d00);color:#031}
+.who2{display:flex;align-items:center;gap:5px;font-family:system-ui,Segoe UI,sans-serif}
+.who2 .dn{font-weight:800;color:#e7eef4} .who2 .vf{color:var(--x-blue)} .who2 .hd{color:#7b8a98;font-weight:400;font-size:13px}
+.xbody{font-family:system-ui,Segoe UI,sans-serif;font-size:18px;line-height:1.45;color:#e7eef4;
+  white-space:pre-wrap;margin:4px 0}
+.reply .xbody{font-size:14.5px}
+.xbody .tag{color:var(--x-blue)}
+.xmeta{display:flex;gap:10px;align-items:center;color:#7b8a98;font-size:13px;margin-top:10px}
+.flag{margin-left:auto;font-weight:800;font-size:11px;padding:3px 9px;border-radius:6px}
+.flag.dry{color:var(--amber);border:1px solid #6b4f12;background:#241804}
+.flag.live{color:var(--nogo);border:1px solid #7a2030;background:#240a0c}
+.flag.down{color:var(--held);border:1px solid #6b4f12}
+.xactions{display:flex;gap:30px;color:#7b8a98;font-size:15px;margin-top:11px}
+.cc{margin-left:auto;font-size:12px} .cc.over{color:var(--nogo);font-weight:700}
+.verch{margin-left:auto;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;font-family:system-ui}
+.verch.pass{color:#031;background:var(--go)} .verch.held{color:#fff;background:var(--nogo)}
+.replies-head{padding:10px 16px;color:#7b8a98;font-size:13px;border-bottom:1px solid #16222e;font-family:system-ui}
+.reply{opacity:0;transform:translateY(8px);transition:.4s}
+.reply.in{opacity:1;transform:none}
+.reply.held{background:rgba(255,90,106,.05)}
+.typing{padding:12px 16px;color:#7b8a98;font-family:system-ui}
+.typing .d{display:inline-block;width:6px;height:6px;border-radius:50%;background:#7b8a98;margin:0 2px;animation:bob 1s infinite}
+.typing .d:nth-child(2){animation-delay:.15s}.typing .d:nth-child(3){animation-delay:.3s}
+@keyframes bob{50%{transform:translateY(-4px);opacity:.5}}
+.consent{display:inline-block;margin:12px 0;padding:5px 14px;border-radius:999px;font-weight:800;font-family:system-ui}
+.consent.go{background:#0e2716;color:var(--go);border:1px solid #1f6f33}
+.consent.hold{background:#241804;color:var(--amber);border:1px solid #6b4f12}
+.blocked{border:1px solid var(--nogo);background:#160809;border-radius:12px;padding:20px;text-align:center}
+.blocked .b1{color:var(--nogo);font-weight:900;letter-spacing:.06em;font-size:16px}
+.blocked .b2{color:#e7eef4;margin:8px 0;font-family:system-ui} .blocked .b3{color:#9fb0c3;font-size:13px}
+.act{margin:14px 0;display:flex;gap:9px;flex-wrap:wrap}
+.awbanner{border:1px solid #6b4f12;background:#1c1606;border-radius:10px;padding:12px;margin-bottom:12px;font-family:system-ui}
+.awbanner b{color:var(--amber)}
+.proof{display:flex;gap:8px;align-items:center;margin-bottom:10px;color:var(--cyan);font-size:11.5px;
+  border:1px solid #16314a;background:#06141f;border-radius:8px;padding:7px 11px}
 
-  /* ---- gauntlet ---- */
-  .track{margin:0 0 24px;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--panel)}
-  .who{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
-  .who .nm{font-weight:700} .who .meta{color:var(--faint);font-size:12px}
-  .who .stamp{margin-left:auto;font-weight:800;letter-spacing:.08em;padding:3px 12px;border-radius:7px;border:2px solid}
-  .stamp.ok{color:var(--go);border-color:var(--go)} .stamp.no{color:var(--nogo);border-color:var(--nogo)}
-  .lane{position:relative;height:8px;background:var(--panel2);border-radius:6px;margin:14px 0 12px;overflow:hidden}
-  .lane .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--accent),var(--accent2));
-    border-radius:6px;width:0;transition:width 1.4s ease}
-  .runner{position:absolute;top:-7px;font-size:16px;transform:translateX(-50%);transition:left 1.4s ease}
-  .obstacles{display:flex;gap:9px;flex-wrap:wrap}
-  .obs{flex:1;min-width:140px;border:1px solid var(--line);border-radius:10px;padding:11px;background:var(--panel2)}
-  .obs.fall{border-color:#7a2020;background:#170a0a;animation:shake .5s}
-  @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-4px)}40%,80%{transform:translateX(4px)}}
-  .obs .ico{font-size:19px} .obs .nm{font-size:12px;color:var(--dim);margin:5px 0}
-  .obs .res{font-weight:800;font-size:12px} .obs.pass .res{color:var(--go)} .obs.fall .res{color:var(--nogo)}
-  .leak{margin-top:8px;font-size:11px;color:#ffb3b3;background:#1a0808;border:1px dashed #7a2020;
-    border-radius:6px;padding:6px;white-space:pre-wrap;word-break:break-word}
+/* alarms */
+.alarm{border-left:4px solid;border-radius:8px;padding:13px 14px;margin-bottom:11px;background:var(--panel2)}
+.alarm.crit{border-color:var(--crit)} .alarm.high{border-color:#ff5a6a} .alarm.med{border-color:var(--amber)}
+.alarm .at{display:flex;gap:9px;align-items:center;margin-bottom:5px}
+.alarm .sv{font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;padding:1px 7px;border-radius:5px;background:#240a0c;color:var(--crit)}
+.alarm.med .sv{background:#241804;color:var(--amber)}
+.alarm .ty{font-weight:800} .alarm .cx{color:#cfe1f0;margin:5px 0} .alarm .rc{color:var(--dim);font-size:12px}
+.alarm .rc::before{content:"▸ ";color:var(--cyan)}
 
-  @media(max-width:480px){
-    .bar{flex-wrap:wrap} .xtext{font-size:16px} .obs{min-width:0;flex-basis:calc(50% - 9px)}
-    .xactions{gap:18px}
-  }
+@media(max-width:560px){ .xbody{font-size:16px} .course{height:108px} .avatar{font-size:22px} }
 </style>
 </head>
 <body>
 <header>
   <div class="bar">
-    <div class="logo">▣ MISSION&nbsp;CONTROL <small>· trust harness</small></div>
-    <div class="spacer"></div>
-    <span id="conn" class="conn">● live</span>
-    <select id="runsel" aria-label="select run"></select>
-    <button id="refresh" aria-label="refresh" title="refresh">↻</button>
+    <span class="brand">◢ MISSION&nbsp;CONTROL <small>// trust harness</small></span>
+    <span class="sp"></span>
+    <span id="conn" class="conn">● link</span>
+  </div>
+  <div class="bar" style="padding-top:0">
+    <div class="ctl"><label>mission</label><select id="mSel"></select></div>
+    <div class="ctl"><label>agent</label><select id="pSel"></select></div>
+    <div class="ctl"><label>scenario</label>
+      <select id="sSel">
+        <option value="normal">normal task</option>
+        <option value="full">full barrage panel</option>
+        <option value="reject">sketchy agent (reject)</option>
+        <option value="block">medical claim (held)</option>
+        <option value="faulty">broken judge (escalate)</option>
+      </select></div>
+    <button class="btn run" id="launch">▶ RUN</button>
+    <span class="sp"></span>
+    <div class="ctl"><label>view run</label><select id="runsel"></select></div>
   </div>
   <div class="readout" id="readout" aria-live="polite"></div>
   <nav role="tablist">
-    <button class="tab" role="tab" aria-selected="true" data-v="timeline">Mission Timeline</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="broadcast">Broadcast &amp; Review</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="gauntlet">Admission Gauntlet</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="alarms">Alarms<span id="alarmPill" class="pill" hidden>0</span></button>
+    <button class="tab" role="tab" aria-selected="true" data-v="pipeline">▌Pipeline</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="gauntlet">▌Proving Ground</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="broadcast">▌Broadcast</button>
+    <button class="tab" role="tab" aria-selected="false" data-v="alarms">▌Alarms<span id="apill" class="pill" hidden>0</span></button>
   </nav>
 </header>
 <main>
-  <section id="timeline" class="view active" role="tabpanel"></section>
-  <section id="broadcast" class="view" role="tabpanel"></section>
+  <section id="pipeline" class="view active" role="tabpanel"></section>
   <section id="gauntlet" class="view" role="tabpanel"></section>
+  <section id="broadcast" class="view" role="tabpanel"></section>
   <section id="alarms" class="view" role="tabpanel"></section>
 </main>
 
 <script>
-const $ = s => document.querySelector(s);
-const esc = s => (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let runId=null, cache=null, lastSig=null, activeTab='timeline', timer=null, tfilter='all', animKey=null;
+const $=s=>document.querySelector(s);
+const esc=s=>(s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let runId=null,cache=null,lastSig=null,active='pipeline',timer=null,tfilter='all',gaunt=null,twKey=null;
+const DISC=[['run','🏃'],['swim','🏊'],['cycle','🚴'],['climb','🧗'],['vault','🤸']];
 
-async function getJSON(u,opt){ const r=await fetch(u,opt); if(!r.ok && r.status>=500) throw new Error(r.status); return r.json(); }
-function setConn(ok){ const c=$('#conn'); c.className='conn'+(ok?'':' down'); c.textContent=ok?'● live':'● disconnected — retrying'; }
-function relTime(ts){ if(!ts) return ''; const d=new Date(ts*1000); return d.toLocaleTimeString([], {hour12:false}); }
-function srcOf(name){ const n=(name||'').toLowerCase(); if(n.includes('anthropic')||n.includes('claude'))return'anthropic';
-  if(n.includes('openai')||n.includes('gpt'))return'openai'; if(n.includes('nvidia')||n.includes('nim')||n.includes('deepseek')||n.includes('mistral')||n.includes('llama')||n.includes('qwen')||n.includes('gemma')||n.includes('phi')||n.includes('nemotron'))return'nvidia'; return''; }
+async function J(u,o){const r=await fetch(u,o);if(!r.ok&&r.status>=500)throw new Error(r.status);return r.json();}
+function setConn(ok){const c=$('#conn');c.className='conn'+(ok?'':' down');c.textContent=ok?'● link':'● lost — retry';}
+function tm(ts){if(!ts)return'';return new Date(ts*1000).toLocaleTimeString([],{hour12:false});}
+function vendorOf(n){n=(n||'').toLowerCase();
+  if(n.includes('claude')||n.includes('anthropic'))return'anthropic';
+  if(n.includes('gpt')||n.includes('openai'))return'openai';
+  if(n.includes('llama')||n.includes('meta'))return'meta';
+  if(n.includes('mixtral')||n.includes('mistral'))return'mistral';
+  if(n.includes('phi')||n.includes('microsoft'))return'microsoft';
+  if(n.includes('qwen'))return'qwen'; if(n.includes('nemotron')||n.includes('nvidia'))return'nvidia';return'';}
+function handleOf(n){const v=vendorOf(n);return '@'+({anthropic:'claude_ai',openai:'openai',meta:'meta_llama',mistral:'mistralai',microsoft:'phi_ai',qwen:'qwen_ai',nvidia:'nvidia_ai'}[v]||(n||'bot').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12));}
+function initials(n){return (n||'?').replace(/[^A-Za-z0-9 ]/g,'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();}
+
+/* ---------- launch controls ---------- */
+async function loadControls(){
+  const [presets,missions]=await Promise.all([J('/api/presets'),J('/api/missions')]);
+  $('#mSel').innerHTML=missions.map(m=>`<option value="${m.key}">${esc(m.name)}</option>`).join('');
+  $('#pSel').innerHTML='<option value="">mock (no keys)</option>'+
+    presets.map(p=>`<option value="${p.key}" ${p.available?'':'disabled'}>${esc(p.label)}${p.available?'':' (no key)'}</option>`).join('');
+}
+$('#launch').onclick=async()=>{
+  const b=$('#launch');b.disabled=true;b.textContent='LAUNCHING…';
+  try{
+    const r=await J('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mission:$('#mSel').value,preset:$('#pSel').value||null,scenario:$('#sSel').value})});
+    runId=r.run_id;location.hash=runId;lastSig=null;twKey=null;gaunt=null;await loadRuns();$('#runsel').value=runId;tick();
+  }catch(e){alert('launch failed: '+e.message);}
+  b.disabled=false;b.textContent='▶ RUN';
+};
 
 async function loadRuns(){
-  const runs = await getJSON('/api/runs');
-  const sel=$('#runsel'); sel.innerHTML = runs.map(r=>`<option value="${r.run_id}">${esc(r.run_id)} · ${esc(r.status)}</option>`).join('');
-  if(!runs.length){ $('#timeline').innerHTML='<div class="empty">No runs yet. Run <code>python harness.py</code> then refresh.</div>'; return; }
-  const hash=location.hash.slice(1);
-  runId = (hash && runs.find(r=>r.run_id===hash)) ? hash : (runId && runs.find(r=>r.run_id===runId) ? runId : runs[0].run_id);
-  sel.value=runId; location.hash=runId;
+  const runs=await J('/api/runs');
+  $('#runsel').innerHTML=runs.map(r=>`<option value="${r.run_id}">${esc(r.run_id)} · ${esc(r.status)}</option>`).join('');
+  if(!runs.length){runId=null;return;}
+  const h=location.hash.slice(1);
+  runId=(h&&runs.find(r=>r.run_id===h))?h:(runId&&runs.find(r=>r.run_id===runId)?runId:runs[0].run_id);
+  $('#runsel').value=runId;location.hash=runId;
 }
 
 async function tick(){
-  if(!runId) return;
+  if(!runId)return;
   try{
-    const d = await getJSON('/api/runs/'+runId);
-    setConn(true);
+    const d=await J('/api/runs/'+runId);setConn(true);
     const last=d.timeline[d.timeline.length-1];
     const sig=[d.run_id,d.timeline.length,last?last.seq:0,d.status,d.taken_down].join('|');
-    if(sig!==lastSig){ lastSig=sig; cache=d; renderHeader(d); renderActive(); }
-  }catch(e){ setConn(false); }
+    if(sig!==lastSig){lastSig=sig;cache=d;renderHeader(d);renderActive();}
+  }catch(e){setConn(false);}
 }
 
 function renderHeader(d){
-  const dotcls = d.status.includes('posted')?'go': d.status==='halted'?'nogo': d.status.includes('awaiting')?'held':'run';
-  $('#readout').innerHTML =
-    `<span><span class="dot ${dotcls}"></span><b>${esc(d.status.toUpperCase())}</b></span>`+
-    `<span>MISSION <b>${esc(d.mission)}</b></span>`+
-    `<span>RUN <b>${esc(d.run_id)}</b></span>`+
-    `<span>${d.agents_certified} agents certified</span>`+
-    `<span>${(d.alarms||[]).length} alarm${(d.alarms||[]).length===1?'':'s'} raised</span>`+
-    (d.rehearsal_proof?`<span>🔒 rehearsed · egress ${esc(d.rehearsal_proof.egress)}</span>`:'');
-  const ap=$('#alarmPill'); const n=(d.alarms||[]).length;
-  ap.hidden=!n; ap.textContent=n; ap.className='pill'+((d.alarms||[]).some(a=>a.severity==='critical')?' crit':'');
+  const led=d.status.includes('posted')?'go':d.status==='halted'?'nogo':d.status.includes('awaiting')?'held':'run';
+  $('#readout').innerHTML=
+    `<span><span class="led ${led}"></span><b>${esc(d.status.toUpperCase())}</b></span>`+
+    `<span>MISSION <b>${esc(d.mission)}</b></span><span>RUN <b>${esc(d.run_id)}</b></span>`+
+    `<span><b>${d.agents_certified}</b> certified</span>`+
+    `<span><b>${(d.alarms||[]).length}</b> alarms</span>`+
+    (d.rehearsal_proof?`<span>🔒 egress ${esc(d.rehearsal_proof.egress)}</span>`:'');
+  const ap=$('#apill'),n=(d.alarms||[]).length;ap.hidden=!n;ap.textContent=n;
+  ap.className='pill'+((d.alarms||[]).some(a=>a.severity==='critical')?' crit':'');
 }
+function renderActive(){({pipeline:renderPipe,gauntlet:renderGauntlet,broadcast:renderBroadcast,alarms:renderAlarms}[active])(cache);}
 
-function renderActive(){ ({timeline:renderTimeline,broadcast:renderBroadcast,gauntlet:renderGauntlet,alarms:renderAlarms}[activeTab])(cache); }
+/* ---------- PIPELINE console ---------- */
+function renderPipe(d){
+  const stageState={};
+  d.timeline.forEach(r=>{ if(r.kind==='stage'){ if(r.name==='start')stageState[r.stage]=stageState[r.stage]||'active';
+    if(r.name==='pass')stageState[r.stage]='done'; } });
+  if(d.status==='halted')for(const k in stageState)if(stageState[k]==='active')stageState[k]='fail';
+  const stages=[['research','RESEARCH','🔎'],['write','WRITE','✍️'],['rehearsal','REHEARSAL','🪞'],['action','ACTION','🚀']];
+  const flow=stages.map((s,i)=>{const st=stageState[s[0]]||'';return `<div class="node ${st}">
+    <div class="nm">${s[2]} ${s[1]}</div><div class="big">${st==='done'?'GO':st==='active'?'··':st==='fail'?'NO-GO':'—'}</div>
+    ${i<stages.length-1?'<span class="arrow">▶</span>':''}</div>`;}).join('');
 
-/* ---------- timeline ---------- */
-function renderTimeline(d){
-  const want = r => tfilter==='all' || (tfilter==='alarms'&&r.kind==='alarm') ||
-    (tfilter==='gates'&&['gate','attack','certificate','panel','verdict'].includes(r.kind)) ||
+  const want=r=>tfilter==='all'||(tfilter==='alarms'&&r.kind==='alarm')||
+    (tfilter==='gates'&&['gate','attack','certificate','panel','verdict'].includes(r.kind))||
     (tfilter==='checks'&&r.kind==='check');
-  const rows = d.timeline.filter(want).map(r=>`
-    <tr class="r-${r.tone}">
-      <td class="seq">${r.seq}</td><td class="tm">${relTime(r.ts)}</td>
-      <td class="stg">${esc(r.stage)}</td>
-      <td><span class="st ${r.tone}">${esc(r.status)}</span></td>
-      <td>${esc(r.text)}${r.meta?`<div class="rowmeta">${esc(r.meta)}</div>`:''}</td>
-    </tr>`).join('');
-  $('#timeline').innerHTML = `
-    <div class="filters">
-      ${['all','alarms','gates','checks'].map(f=>`<span class="chip ${tfilter===f?'on':''}" data-f="${f}">${f}</span>`).join('')}
-    </div>
-    <div class="card"><table>
-      <thead><tr><th>#</th><th>time</th><th>stage</th><th>status</th><th>event</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="5" class="empty">no matching events</td></tr>'}</tbody>
-    </table></div>`;
-  $('#timeline').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{tfilter=c.dataset.f;renderTimeline(cache);});
+  const tclass={go:'s-go',nogo:'s-nogo',crit:'s-nogo',high:'s-nogo',held:'s-held',med:'s-amber',accent:'s-cyan',muted:'s-dim'};
+  const lines=d.timeline.filter(want).map(r=>`<div class="ln ${r.tone==='nogo'||r.tone==='crit'?'bad':''} ${r.kind==='alarm'?'alarm':''}">
+    <span class="tm">${tm(r.ts)}</span><span class="sg">${esc(r.stage)}</span>
+    <span class="stt ${tclass[r.tone]||'s-dim'}">${esc(r.status)}</span>
+    <span><span class="tx">${esc(r.text)}</span>${r.meta?`<div class="mt">${esc(r.meta)}</div>`:''}</span></div>`).join('');
+  $('#pipeline').innerHTML=`<div class="hud"><div class="flow">${flow}</div>
+    <div class="filters">${['all','alarms','gates','checks'].map(f=>`<span class="chip ${tfilter===f?'on':''}" data-f="${f}">${f}</span>`).join('')}</div>
+    <div class="console">${lines}<div class="ln"><span class="tm cursor"></span><span></span><span></span><span></span></div></div></div>`;
+  $('#pipeline').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{tfilter=c.dataset.f;renderPipe(cache);});
+  const con=$('#pipeline .console'); if(con)con.scrollTop=con.scrollHeight;
 }
 
-/* ---------- broadcast ---------- */
-function renderBroadcast(d){
-  const p=d.post||{};
-  if(d.halted || (!p.present)){
-    const a=(d.alarms||[]).find(x=>['CERTIFICATION_FAILED','ESCALATE_HUMAN'].includes(x.type))||(d.alarms||[])[0];
-    $('#broadcast').innerHTML = a ? `<div class="blocked">
-        <div class="b-no">⛔ POST BLOCKED BY THE HARNESS — it never reached X</div>
-        <div class="b-why">${esc(a.type)} — ${esc(a.context)}</div>
-        <div class="b-rec">▸ ${esc(a.recommended_action)}</div></div>`
-      : '<div class="empty">No post for this run.</div>';
-    return;
-  }
-  const text = esc(p.text).replace(/(\[[A-Za-z0-9_]+\])/g,'<span class="tag">$1</span>')
-    .replace(/(#[A-Za-z0-9_]+)/g,'<span class="tag">$1</span>');
-  const brand = (d.mission||'').split('—')[0].trim() || 'Brand';
-  let flag = p.posted ? (p.live?'<span class="flag live">● LIVE</span>':'<span class="flag dry">DRY RUN</span>')
-                      : '<span class="flag staged">STAGED · not sent</span>';
-  if(d.taken_down) flag='<span class="flag down">TAKEN DOWN</span>';
-  const over = p.within_limit===false;
-  const proof = d.rehearsal_proof
-    ? `<div class="proof">🔒 Rehearsed in a sandbox with network egress <b>${esc(d.rehearsal_proof.egress)}</b> · ${d.rehearsal_proof.byte_len} bytes, byte-identical to the live payload</div>` : '';
-  const awaiting = d.awaiting
-    ? `<div class="awaiting"><b>AWAITING HUMAN APPROVAL</b> — nothing posts (even dry-run) until you approve.</div>` : '';
-
-  const card = `
-    <div class="card xpost">
-      <div class="xhead"><div class="avatar"></div>
-        <div class="xid"><span class="xname">${esc(brand)}<span class="xverify">✓</span></span>
-          <span class="xhandle">${esc(p.author||'@yourbrand')} · now</span></div>${flag}</div>
-      <div class="xtext">${text}</div>
-      <div class="xactions"><span>↩</span><span>⟲</span><span>♡</span><span>↗</span>
-        <span class="cc ${over?'over':''}">${p.char_count||0}/280</span></div>
-    </div>`;
-
-  const actions = `<div class="act-row">
-      ${d.awaiting?'<button class="primary" id="approveBtn">Approve &amp; post (dry-run)</button>':''}
-      ${d.can_takedown?'<button class="danger ghost" id="takedownBtn">Take down (rollback)</button>':''}
-    </div>`;
-
-  const panel=d.panel||{judges:[]};
-  let consent='';
-  if(panel.present) consent = panel.eligible
-    ? `<span class="consent go">✓ UNANIMOUS CONSENT — publish-eligible</span>`
-    : `<span class="consent hold">⏸ HELD — a judge flagged a criterion</span>`;
-  const cards=(panel.judges||[]).map(j=>{
-    const cls=j.verdict==='PASS'?'pass':'held'; const src=srcOf(j.name);
-    const chips=Object.entries(j.criteria||{}).map(([k,v])=>`<span class="crit-chip ${v}">${esc(k)}</span>`).join('');
-    return `<div class="rev"><div class="top"><span class="model">${esc(j.name)}</span>
-      ${src?`<span class="src ${src}">${src}</span>`:''}
-      <span class="vbadge ${cls}">${esc(j.verdict)}</span></div>
-      <div class="reason">${esc(j.reason)}</div><div class="crits">${chips}</div></div>`;
-  }).join('') || '<div class="empty">No review panel yet.</div>';
-
-  $('#broadcast').innerHTML = `<div class="grid">
-    <div><h2>Simulated X — exactly what would be sent</h2>${proof}${awaiting}${card}${actions}</div>
-    <div><h2>Review panel · ${esc((panel.rubric||[]).join(' · '))}</h2>${consent}
-      <div class="reviewers">${cards}</div>
-      <div class="note">Binary pass/fail per criterion · unanimous consent · no likes, scores, or averages.</div>
-    </div></div>`;
-
-  const ab=$('#approveBtn');
-  if(ab) ab.onclick=async()=>{ ab.disabled=true; ab.textContent='posting…';
-    const r=await fetch('/api/runs/'+runId+'/approve',{method:'POST'}); const res=await r.json();
-    if(!res.ok){ ab.disabled=false; ab.textContent='Approve & post (dry-run)'; alert('Cannot post: '+res.reason); }
-    lastSig=null; tick(); };
-  const tb=$('#takedownBtn');
-  if(tb) tb.onclick=async()=>{ if(!confirm('Take down this post (record a rollback)?'))return;
-    tb.disabled=true; tb.textContent='removing…';
-    const r=await fetch('/api/runs/'+runId+'/takedown',{method:'POST'}); await r.json(); lastSig=null; tick(); };
-}
-
-/* ---------- gauntlet ---------- */
+/* ---------- GAUNTLET obstacle course ---------- */
 function renderGauntlet(d){
   const g=d.gauntlet||[];
-  if(!g.length){ $('#gauntlet').innerHTML='<div class="card empty">No admission runs recorded for this run.</div>'; return; }
-  $('#gauntlet').innerHTML = `<div style="margin-bottom:12px;color:var(--dim);font-size:12px">
-      Each obstacle is one real attack class · a fall is a real canary leak (actual output shown)</div>` +
+  if(!g.length){$('#gauntlet').innerHTML='<div class="hud empty">No admission runs yet — launch one above.</div>';return;}
+  $('#gauntlet').innerHTML=`<div class="gtitle">THE PROVING GROUND — each lane is a real agent; each obstacle a real attack.
+    The agent runs · swims · cycles the course; it trips on a real canary leak and earns a medal only if it survives all of it.
+    <span class="replay" id="replayAll">↻ replay</span></div>`+
     g.map((a,gi)=>{
-      const firstFall=a.attacks.findIndex(x=>!x.survived);
-      const pct = firstFall<0 ? 100 : Math.round((firstFall/a.attacks.length)*100);
-      const obs=a.attacks.map(x=>`
-        <div class="obs ${x.survived?'pass':'fall'}">
-          <div class="ico">${x.survived?'🛡️':'💥'}</div><div class="nm">${esc(x.attack)}</div>
-          <div class="res">${x.survived?'SURVIVED':'BREACH'}</div>
-          ${x.survived?'':`<div class="leak">${esc(x.leaked||'')}</div>`}
-        </div>`).join('');
+      const v=vendorOf(a.agent);
+      const segs=a.attacks.map((x,i)=>{const dz=DISC[i%DISC.length];
+        return `<div class="seg d-${dz[0]}" data-i="${i}"><span class="disc">${dz[1]}</span>
+          <span class="mark">${x.survived?'✅':'💥'}</span><span class="lbl">${esc(x.attack)}</span></div>`;}).join('');
+      const leaks=a.attacks.filter(x=>!x.survived&&x.leaked).map(x=>`<div class="lk">💥 ${esc(x.attack)} → ${esc(x.leaked)}</div>`).join('');
       return `<div class="track" data-gi="${gi}">
-        <div class="who"><span class="nm">${esc(a.agent)}</span>
-          <span class="meta">policy ${esc(a.policy||'')} · canary ${esc(a.canary||'')}</span>
-          <span class="stamp ${a.certified?'ok':'no'}">${a.certified?'CERTIFIED':'REFUSED'}</span></div>
-        <div class="lane"><div class="fill" data-pct="${pct}"></div>
-          <div class="runner" data-pct="${pct}">${a.certified?'🏁':'🏃'}</div></div>
-        <div class="obstacles">${obs}</div></div>`;
+        <div class="head"><span class="who">${esc(a.agent)}</span><span class="vend">${v||'agent'} · policy ${esc(a.policy||'')}</span>
+          <span class="verdict ${a.certified?'ok':'no'}">${a.certified?'🥇 CERTIFIED':'⛔ REFUSED'}</span></div>
+        <div class="course">${segs}<div class="ground"></div><div class="finish"></div>
+          <div class="avatar">🤖</div><div class="medal">🥇</div></div>
+        ${leaks?`<div class="leakrow">${leaks}</div>`:''}</div>`;
     }).join('');
-  // animate once per run (not on every poll)
-  if(animKey!==d.run_id){ animKey=d.run_id;
-    requestAnimationFrame(()=>$('#gauntlet').querySelectorAll('.fill,.runner').forEach(el=>{
-      const pct=el.dataset.pct; if(el.classList.contains('fill'))el.style.width=pct+'%'; else el.style.left=pct+'%'; }));
-  } else { $('#gauntlet').querySelectorAll('.fill').forEach(el=>el.style.width=el.dataset.pct+'%');
-    $('#gauntlet').querySelectorAll('.runner').forEach(el=>el.style.left=el.dataset.pct+'%'); }
+  $('#replayAll').onclick=()=>{gaunt=null;animateGauntlet(d);};
+  if(gaunt!==d.run_id){gaunt=d.run_id;animateGauntlet(d);}
+  else $('#gauntlet').querySelectorAll('.track').forEach((t,gi)=>placeFinal(t,d.gauntlet[gi]));
+}
+function placeFinal(track,a){
+  const segs=[...track.querySelectorAll('.seg')];const fall=a.attacks.findIndex(x=>!x.survived);
+  segs.forEach((s,i)=>{ if(fall<0||i<fall)s.classList.add('cleared'); if(i===fall)s.classList.add('fell'); });
+  const av=track.querySelector('.avatar');const stop=fall<0?segs.length-1:fall;
+  av.style.left=`calc(${(stop+ (fall<0?0.5:0.5))/segs.length*100}% - 13px)`;
+  if(fall>=0)av.classList.add('tripped'); else track.querySelector('.medal').classList.add('show');
+}
+async function animateGauntlet(d){
+  const tracks=[...$('#gauntlet').querySelectorAll('.track')];
+  for(let gi=0;gi<tracks.length;gi++){
+    const a=d.gauntlet[gi],track=tracks[gi],segs=[...track.querySelectorAll('.seg')];
+    const av=track.querySelector('.avatar');av.classList.remove('tripped');av.style.left='-4px';
+    segs.forEach(s=>s.classList.remove('cleared','fell'));track.querySelector('.medal').classList.remove('show');
+    await sleep(120);
+    for(let i=0;i<segs.length;i++){
+      const dz=DISC[i%DISC.length];av.textContent={run:'🏃',swim:'🏊',cycle:'🚴',climb:'🧗',vault:'🤸'}[dz[0]];
+      av.style.left=`calc(${(i+0.5)/segs.length*100}% - 13px)`;
+      await sleep(760);
+      if(!a.attacks[i].survived){ av.textContent='🤕';av.classList.add('tripped');segs[i].classList.add('fell');break; }
+      segs[i].classList.add('cleared');
+    }
+    if(a.certified){ av.textContent='🏆';av.style.left='calc(100% - 34px)';await sleep(400);track.querySelector('.medal').classList.add('show'); }
+    await sleep(260);
+  }
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------- BROADCAST fake X + live replies ---------- */
+function renderBroadcast(d){
+  if(d.halted||!(d.post||{}).present){
+    const a=(d.alarms||[]).find(x=>['CERTIFICATION_FAILED','ESCALATE_HUMAN'].includes(x.type))||(d.alarms||[])[0];
+    $('#broadcast').innerHTML=`<div class="xwrap">${a?`<div class="blocked"><div class="b1">⛔ POST BLOCKED — IT NEVER REACHED X</div>
+      <div class="b2">${esc(a.type)} — ${esc(a.context)}</div><div class="b3">▸ ${esc(a.recommended_action)}</div></div>`:'<div class="empty">No post.</div>'}</div>`;
+    return;
+  }
+  const p=d.post,brand=(d.mission||'').split('—')[0].trim()||'Brand';
+  const body=esc(p.text).replace(/(#[A-Za-z0-9_]+)/g,'<span class="tag">$1</span>');
+  let flag=p.posted?(p.live?'<span class="flag live">● LIVE</span>':'<span class="flag dry">DRY RUN</span>'):'<span class="flag dry">STAGED</span>';
+  if(d.taken_down)flag='<span class="flag down">TAKEN DOWN</span>';
+  const over=p.within_limit===false;
+  const proof=d.rehearsal_proof?`<div class="proof">🔒 Rehearsed in a sandbox with egress <b>${esc(d.rehearsal_proof.egress)}</b> — ${d.rehearsal_proof.byte_len} bytes, byte-identical to live</div>`:'';
+  const aw=d.awaiting?`<div class="awbanner"><b>⏸ AWAITING HUMAN APPROVAL</b> — nothing posts (even dry-run) until you approve.</div>`:'';
+  const panel=d.panel||{judges:[]};
+  const consent=panel.present?(panel.eligible?`<div class="consent go">✓ UNANIMOUS CONSENT — publish-eligible</div>`:`<div class="consent hold">⏸ HELD — a judge flagged it</div>`):'';
+  $('#broadcast').innerHTML=`<div class="xwrap">${proof}${aw}
+    <div class="xcard"><div class="xtop"><div class="xrow"><div class="av ${vendorOf(brand)}">${esc(initials(brand))}</div>
+      <div style="flex:1"><div class="who2"><span class="dn">${esc(brand)}</span><span class="vf">✔</span>
+        <span class="hd">${esc(p.author||'@brand')} · now</span>${flag}</div>
+        <div class="xbody">${body}</div>
+        <div class="xactions"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span>
+          <span class="cc ${over?'over':''}">${p.char_count||0}/280</span></div></div></div></div>
+      <div class="replies-head">${consent} · Replies from the review panel</div>
+      <div id="repFeed"></div></div>
+    <div class="act">${d.awaiting?'<button class="btn run" id="apr">Approve &amp; post (dry-run)</button>':''}
+      ${d.can_takedown?'<button class="btn" id="tkd">Take down (rollback)</button>':''}</div></div>`;
+  streamReplies(d,panel.judges||[]);
+  const ab=$('#apr');if(ab)ab.onclick=async()=>{ab.disabled=true;ab.textContent='posting…';
+    const r=await fetch('/api/runs/'+runId+'/approve',{method:'POST'});const j=await r.json();
+    if(!j.ok){ab.disabled=false;ab.textContent='Approve & post (dry-run)';alert(j.reason);}lastSig=null;twKey=null;tick();};
+  const tb=$('#tkd');if(tb)tb.onclick=async()=>{if(!confirm('Take down (record rollback)?'))return;tb.disabled=true;
+    await fetch('/api/runs/'+runId+'/takedown',{method:'POST'});lastSig=null;tick();};
+}
+async function streamReplies(d,judges){
+  const feed=$('#repFeed');if(!feed)return;
+  const key=d.run_id+'|'+judges.length+'|'+d.status;
+  const animate=twKey!==key; twKey=key; feed.innerHTML='';
+  for(const j of judges){
+    const v=vendorOf(j.name);
+    if(animate){const t=document.createElement('div');t.className='typing';
+      t.innerHTML=`<span class="d"></span><span class="d"></span><span class="d"></span> ${esc(j.name)} is replying…`;
+      feed.appendChild(t);await sleep(650);t.remove();}
+    const el=document.createElement('div');el.className='reply'+(j.pass?'':' held');
+    el.innerHTML=`<div class="xrow"><div class="av ${v}">${esc(initials(j.name))}</div>
+      <div style="flex:1"><div class="who2"><span class="dn">${esc(j.name)}</span><span class="vf">✔</span>
+        <span class="hd">${esc(handleOf(j.name))} · now</span>
+        <span class="verch ${j.pass?'pass':'held'}">${j.pass?'✓ approves':'✗ holds'}</span></div>
+      <div class="xbody">${esc(j.comment||'')}</div></div></div>`;
+    feed.appendChild(el);requestAnimationFrame(()=>el.classList.add('in'));
+    if(animate)await sleep(260);else el.classList.add('in');
+  }
 }
 
-/* ---------- alarms ---------- */
+/* ---------- ALARMS ---------- */
 function renderAlarms(d){
   const a=d.alarms||[];
-  $('#alarms').innerHTML = a.length ? `<div class="card">${a.map(x=>{
-    const sev={critical:'crit',high:'high',medium:'med'}[x.severity]||'high';
-    const fails=x.failed_attacks?`<div class="afail">failed attacks: ${x.failed_attacks.map(f=>esc(f.attack||f)).join(', ')}</div>`:'';
-    return `<div class="alarm ${sev}"><div class="atop"><span class="sev">${esc(x.severity)}</span>
-      <span class="atype">${esc(x.type)}</span><span style="color:var(--faint);margin-left:auto;font-size:12px">${esc(x.stage)}</span></div>
-      <div class="actx">${esc(x.context)}</div><div class="arec">${esc(x.recommended_action)}</div>${fails}</div>`;
-  }).join('')}</div>` : '<div class="card empty">No alarms — every gate is clean. ✓</div>';
+  $('#alarms').innerHTML=a.length?`<div class="hud">${a.map(x=>{const s={critical:'crit',high:'high',medium:'med'}[x.severity]||'high';
+    const f=x.failed_attacks?`<div class="rc" style="color:#ffb6bd">failed: ${x.failed_attacks.map(z=>esc(z.attack||z)).join(', ')}</div>`:'';
+    return `<div class="alarm ${s}"><div class="at"><span class="sv">${esc(x.severity)}</span><span class="ty">${esc(x.type)}</span>
+      <span style="margin-left:auto;color:var(--faint);font-size:11px">${esc(x.stage)}</span></div>
+      <div class="cx">${esc(x.context)}</div><div class="rc">${esc(x.recommended_action)}</div>${f}</div>`;}).join('')}</div>`
+    :'<div class="hud empty">No alarms — every gate is clean. ✓</div>';
 }
 
-/* ---------- tabs / wiring ---------- */
-function selectTab(t){ activeTab=t;
-  document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected', x.dataset.v===t));
-  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active', x.id===t));
-  if(cache) renderActive();
-}
-document.querySelectorAll('.tab').forEach((t,i,all)=>{
-  t.onclick=()=>selectTab(t.dataset.v);
-  t.onkeydown=e=>{ if(e.key==='ArrowRight'){all[(i+1)%all.length].focus();all[(i+1)%all.length].click();}
-    if(e.key==='ArrowLeft'){all[(i-1+all.length)%all.length].focus();all[(i-1+all.length)%all.length].click();} };
-});
-$('#runsel').onchange=e=>{ runId=e.target.value; location.hash=runId; lastSig=null; tick(); };
-$('#refresh').onclick=async()=>{ await loadRuns(); $('#runsel').value=runId; lastSig=null; tick(); };
-window.addEventListener('hashchange',()=>{ const h=location.hash.slice(1); if(h&&h!==runId){runId=h;$('#runsel').value=h;lastSig=null;tick();} });
-document.addEventListener('visibilitychange',()=>{ if(document.hidden){clearInterval(timer);timer=null;}
-  else if(!timer){ tick(); timer=setInterval(tick,2500);} });
+/* ---------- wiring ---------- */
+function selTab(t){active=t;document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x.dataset.v===t));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===t));if(cache)renderActive();}
+document.querySelectorAll('.tab').forEach((t,i,all)=>{t.onclick=()=>selTab(t.dataset.v);
+  t.onkeydown=e=>{if(e.key==='ArrowRight')all[(i+1)%all.length].click();if(e.key==='ArrowLeft')all[(i-1+all.length)%all.length].click();};});
+$('#runsel').onchange=e=>{runId=e.target.value;location.hash=runId;lastSig=null;twKey=null;gaunt=null;tick();};
+window.addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==runId){runId=h;lastSig=null;twKey=null;gaunt=null;loadRuns().then(tick);}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInterval(timer);timer=null;}else if(!timer){tick();timer=setInterval(tick,2000);}});
 
-async function boot(){ $('#timeline').innerHTML='<div class="empty">loading flight log…</div>';
-  await loadRuns(); await tick(); timer=setInterval(tick,2500); }
-boot().catch(e=>{ $('#timeline').innerHTML='<div class="empty">'+esc(e.message)+'</div>'; });
+async function boot(){$('#pipeline').innerHTML='<div class="hud empty cursor">booting flight console…</div>';
+  await loadControls();await loadRuns();await tick();timer=setInterval(tick,2000);}
+boot().catch(e=>{$('#pipeline').innerHTML='<div class="hud empty">'+esc(e.message)+'</div>';});
 </script>
 </body>
 </html>

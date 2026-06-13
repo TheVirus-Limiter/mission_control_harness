@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
+import uuid
 
 # Make the project root importable whether launched as `uvicorn ui.server:app`
 # from mission-control/ or as a module from elsewhere.
@@ -28,7 +30,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -37,6 +39,7 @@ from materials import Store
 
 DB_PATH = os.environ.get("MISSION_DB", os.path.join(BASE_DIR, "mission.db"))
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+MISSIONS_DIR = os.path.join(BASE_DIR, "missions")
 
 app = FastAPI(title="Mission Control")
 
@@ -345,6 +348,76 @@ def api_takedown(run_id: str):
         return {"ok": True, "post_id": rec["post_id"]}
     finally:
         st.close()
+
+
+# ---------------------------------------------------------------------------
+# Mission control: list presets/missions and LAUNCH a run from the dashboard.
+# Launches are always non-interactive -> dry-run (they can never post live).
+# ---------------------------------------------------------------------------
+@app.get("/api/presets")
+def api_presets():
+    from models.judges import PRESETS
+
+    return [{"key": p.key, "label": p.name, "vendor": p.vendor, "provider": p.provider,
+             "model": p.model, "available": bool(os.environ.get(p.env_key))}
+            for p in PRESETS]
+
+
+@app.get("/api/missions")
+def api_missions():
+    import yaml
+
+    out = []
+    for fn in sorted(os.listdir(MISSIONS_DIR)):
+        if not fn.endswith((".yaml", ".yml")):
+            continue
+        try:
+            with open(os.path.join(MISSIONS_DIR, fn), encoding="utf-8") as f:
+                m = yaml.safe_load(f)
+            out.append({"key": fn.rsplit(".", 1)[0], "name": m.get("mission", fn),
+                        "description": m.get("description", "")})
+        except Exception:
+            continue
+    return out
+
+
+_RUNS_LOCK = threading.Lock()
+
+
+@app.post("/api/launch")
+def api_launch(body: dict = Body(default={})):
+    """Start a run in the background (non-interactive -> dry-run). Returns its
+    run_id immediately; the dashboard then polls it live like any other run."""
+    mission_key = (body.get("mission") or "launch").replace("..", "").replace("/", "")
+    mission_path = os.path.join(MISSIONS_DIR, mission_key + ".yaml")
+    if not os.path.isfile(mission_path):
+        raise HTTPException(404, f"no such mission: {mission_key}")
+
+    preset = body.get("preset") or None
+    scenario = body.get("scenario") or "normal"   # normal|reject|block|faulty|full
+    real = bool(body.get("real")) or bool(preset)
+    flags = {"reject_demo": scenario == "reject", "block_demo": scenario == "block",
+             "faulty_grader": scenario == "faulty", "full_panel": scenario == "full"}
+    run_id = uuid.uuid4().hex[:8]
+
+    def worker():
+        from harness import Harness, auto_approver  # lazy: heavy import
+
+        os.environ["DRY_RUN"] = "1"  # launches never post live
+        st = Store(DB_PATH)
+        try:
+            Harness(mission_path, st, real=real, preset=preset, approver=auto_approver,
+                    **flags).run(run_id=run_id)
+        except Exception as e:
+            try:
+                st.log(run_id, "mission", "run", "error", ok=False, detail={"error": str(e)})
+            except Exception:
+                pass
+        finally:
+            st.close()
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"run_id": run_id, "mission": mission_key, "preset": preset, "scenario": scenario}
 
 
 # ---------------------------------------------------------------------------
