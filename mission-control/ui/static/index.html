@@ -129,6 +129,18 @@ button{font-family:inherit;cursor:pointer}
 .hint{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:14px}
 .sess-strip{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px}
 .sess-strip b{color:var(--cyan)}
+.sect{display:flex;align-items:baseline;gap:12px;margin:18px 0 8px}
+.sect-l{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.sect-note{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+.sect-warn{font-family:var(--mono);font-size:10.5px;color:var(--held)}
+.mcard{position:relative;overflow:hidden}
+.mcard .rec{position:absolute;top:9px;right:-26px;transform:rotate(45deg);background:var(--gold);color:#0a140f;
+  font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:.06em;padding:2px 26px;box-shadow:0 0 10px rgba(255,210,74,.4)}
+.mcard .pvbadge{position:absolute;top:8px;left:8px;font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:.08em;
+  color:var(--faint);border:1px solid var(--hair);border-radius:5px;padding:1px 6px}
+.mcard.pv{background:var(--panel2)}
+.tk.live{border-color:rgba(255,84,102,.4)} .tk.live.on{background:rgba(255,84,102,.28)} .tk.live.on .knob{background:var(--no)}
+.tlabel.livewarn{color:var(--no);font-weight:700}
 
 /* ---- robot sprite ---- */
 .botscale{display:inline-block;transform-origin:bottom center}
@@ -344,6 +356,10 @@ button{font-family:inherit;cursor:pointer}
 .xconsent{padding:10px 16px;font-family:var(--mono);font-size:12px;font-weight:700;border-bottom:1px solid var(--x-border)}
 .xconsent.go{color:var(--go)}.xconsent.held{color:var(--held)}.xconsent.esc{color:var(--no)}
 .xheld-stamp{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);font-family:var(--arc);font-size:34px;color:var(--no);border:5px solid var(--no);border-radius:12px;padding:10px 22px;z-index:5;animation:slam .5s;pointer-events:none;text-shadow:0 0 18px rgba(255,84,102,.6)}
+.xintervene{margin:12px 16px;padding:14px;border:1px solid rgba(255,84,102,.4);background:rgba(255,84,102,.06);border-radius:12px}
+.xintervene .hi-h{font-weight:700;color:var(--no);font-size:15px}
+.xintervene .hi-s{color:var(--x-muted);font-size:13px;margin:5px 0 10px}
+.xintervene textarea{width:100%;box-sizing:border-box;min-height:58px;background:#16181c;border:1px solid var(--x-border);border-radius:9px;padding:9px;color:var(--x-text);font:inherit;font-size:14px;margin-bottom:10px}
 
 /* ---- keyframes ---- */
 @keyframes blink{50%{opacity:0}}
@@ -410,7 +426,7 @@ const STEP_LABELS={select:'PICK',gauntlet:'GAUNTLET',write:'WRITE',rehearsal:'RE
 let presets=[], session=null;
 let runId=null, view=null, phase='select', failAt=null, t0=null;
 let played=new Set(), seenSeq=new Set(), pollTimer=null, autoTimer=null;
-let sel={model:null, vendor:null, label:null, topic:'Lumora modular sleep system launch', inject:'none', human:true, mission:'lumora'};
+let sel={model:null, vendor:null, label:null, preview:false, topic:'Lumora modular sleep system launch', inject:'none', human:true, live:false, mission:'lumora'};
 let critiques=[];
 
 /* ===== lineage (robot colours / monograms — original emblems) ===== */
@@ -419,7 +435,7 @@ const LIN={
   zai:{body:'#39c5ff',trim:'#aee6ff',mono:'Z'}, mistral:{body:'#ff7a2f',trim:'#ffc199',mono:'M'},
   microsoft:{body:'#7bd64a',trim:'#cdf2ad',mono:'φ'}, meta:{body:'#4f8cff',trim:'#aecbff',mono:'L'},
   anthropic:{body:'#d98a4f',trim:'#ffcf99',mono:'A'}, nvidia:{body:'#76d800',trim:'#c4f78a',mono:'N'},
-  sketchy:{body:'#ff4d5e',trim:'#ff9aa3',mono:'!'},
+  sketchy:{body:'#ff4d5e',trim:'#ff9aa3',mono:'!'}, preview:{body:'#6f8f7f',trim:'#cfeede',mono:'▷'},
 };
 const lin=v=>LIN[v]||{body:'#6fd0ef',trim:'#bdeccf',mono:'?'};
 function robot(vendor,pose='idle',scale=1){
@@ -547,12 +563,14 @@ async function tick(){
 }
 
 /* ===== launch ===== */
+function selectedCard(){const{real,preview}=allCards();return [...real,...preview].find(c=>c.key===sel.model)||null;}
 function runParams(){
-  const sketchy=sel.model==='sketchy';
-  const picked=sketchy?null:presets.find(p=>p.key===sel.model);
-  const realOK=!!(picked&&picked.available);
-  const scenario=sketchy?'reject':(sel.inject==='held'?'block':sel.inject==='faulty'?'faulty':'full');
-  return {mission:sel.mission, preset:realOK?sel.model:null, scenario, human_gate:sel.human};
+  const c=selectedCard();
+  const preview=!c||!c.real;        // a real card runs the real pipeline; everything else is mock
+  const sketchy=c&&c.key==='sketchy';
+  const scenario=sketchy?'reject':(sel.inject==='held'?'block':sel.inject==='faulty'?'faulty':(preview?'full':'normal'));
+  const preset=(c&&c.real)?c.key:null;   // real preset key -> server runs real (Tavily + real AI + real panel)
+  return {mission:sel.mission, preset, scenario, human_gate:sel.human, live:sel.live&&!preview};
 }
 async function launch(){
   cancelAuto();played.clear();seenSeq.clear();t0=null;failAt=null;critiques=[];
@@ -564,22 +582,31 @@ async function launch(){
 }
 
 /* ===== SELECT ===== */
-const DISPLAY=['gptoss120','qwen3','glm','mixtral','phi4','llama4','claude'];
-function modelCards(){
-  const out=[];
-  DISPLAY.forEach(k=>{const p=presets.find(x=>x.key===k);if(p)out.push(p);});
-  out.push({key:'sketchy',label:'SketchyAgent v0',vendor:'sketchy',model:'sketchy-agent-v0',profile:'untrust'});
-  return out;
+function allCards(){
+  const get=k=>presets.find(p=>p.key===k);
+  const real=[];
+  ['claude','gpt'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available,rec:true});});
+  ['gptoss120','qwen3','glm','mixtral','phi4','llama4'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available});});
+  const preview=[
+    {key:'pv-deep',label:'Preview Agent',vendor:'preview',model:'deterministic · no API',profile:'deep',preview:true},
+    {key:'pv-lex',label:'Preview Lite',vendor:'preview',model:'deterministic · no API',profile:'lexical',preview:true},
+    {key:'sketchy',label:'SketchyAgent v0',vendor:'sketchy',model:'untrusted · no API',profile:'untrust',preview:true},
+  ];
+  return {real,preview};
 }
 function renderSelect(){
-  const cards=modelCards();
+  const {real,preview}=allCards();const cards=[...real,...preview];
   const s=session||{};
   const sessStrip=s.attacks?`<div class="sess-strip">session proving ground · <b>${s.survived}/${s.attacks}</b> attacks survived · ${s.agents_refused} agent${s.agents_refused===1?'':'s'} refused</div>`:'';
+  const noKeys=!real.some(c=>c.real);
   $('#stage').innerHTML=`<div class="wrap" style="animation:fadein .3s">
     <h1 class="h-arc" style="font-size:17px;margin:0 0 6px">SELECT AGENT</h1>
     <p class="sub">Pick the model that will research, write and ship the post. Before it touches the pipeline it must survive the <b style="color:var(--go)">Admission Gauntlet</b> — trust is earned, not assumed.</p>
     ${sessStrip}
-    <div class="mgrid">${cards.map(card).join('')}</div>
+    <div class="sect"><span class="sect-l">⚡ REAL AI · live responses</span>${noKeys?'<span class="sect-warn">no API key detected — these will run as preview</span>':'<span class="sect-note">Tavily research + real model + real review panel · uses tokens</span>'}</div>
+    <div class="mgrid">${real.map(card).join('')}</div>
+    <div class="sect"><span class="sect-l">▷ PREVIEW · deterministic, no API spend</span></div>
+    <div class="mgrid">${preview.map(card).join('')}</div>
     <div class="field-lbl">What should this post be about?</div>
     <input class="tinput" id="topic" value="${esc(sel.topic)}">
     <div class="chip-row" style="margin-top:10px">${['Lumora sleep launch','Giving Tuesday','Essence restock','Sleep tips thread'].map(c=>`<span class="qchip" data-q="${esc(c)}">${esc(c)}</span>`).join('')}</div>
@@ -589,34 +616,44 @@ function renderSelect(){
       <div><div class="field-lbl" style="margin:0 0 6px">human approval</div>
         <div class="toggle"><div class="tk ${sel.human?'on':''}" id="tk"><div class="knob"></div></div>
           <span class="tlabel">${sel.human?'ON · asks you first':'OFF · auto-posts'}</span></div></div>
+      <div><div class="field-lbl" style="margin:0 0 6px">post target</div>
+        <div class="toggle"><div class="tk live ${sel.live?'on':''}" id="tklive"><div class="knob"></div></div>
+          <span class="tlabel ${sel.live?'livewarn':''}">${sel.live?'LIVE · posts to X for real':'DRY-RUN · nothing is sent'}</span></div></div>
       <button class="btn go arc" id="run" style="margin-left:auto" ${sel.model?'':'disabled'}>▶ RUN GAUNTLET</button>
     </div>
     <div class="hint">${hintFor()}</div>
   </div>`;
-  // wire
   $$('.mcard').forEach(el=>el.onclick=()=>{const c=cards.find(x=>x.key===el.dataset.k);
-    sel.model=c.key;sel.vendor=c.vendor;sel.label=c.label;render();});
+    sel.model=c.key;sel.vendor=c.vendor;sel.label=c.label;sel.preview=!c.real;
+    if(sel.preview)sel.live=false;  // live posting needs a real model
+    render();});
   $$('.qchip').forEach(el=>el.onclick=()=>{sel.topic=el.dataset.q;$('#topic').value=el.dataset.q;});
   $('#topic').oninput=e=>sel.topic=e.target.value;
   $$('#seg button').forEach(b=>b.onclick=()=>{sel.inject=b.dataset.k;render();});
-  $('#tk').onclick=()=>{sel.human=!sel.human;render();};
+  $('#tk').onclick=()=>{sel.human=!sel.human;if(!sel.human)sel.live=false;render();};
+  $('#tklive').onclick=()=>{sel.live=!sel.live;if(sel.live)sel.human=true;render();};  // live ALWAYS goes through the human gate
   const rb=$('#run');if(rb)rb.onclick=()=>{if(sel.model)launch();};
 }
 function card(c){
   const tier=c.profile==='untrust'?'untrust':TIER_OF(c.profile);
   const seld=sel.model===c.key?('sel'+(c.key==='sketchy'?' unt':'')):'';
-  return `<div class="mcard ${seld}" data-k="${c.key}">
+  return `<div class="mcard ${seld} ${c.preview?'pv':''}" data-k="${c.key}">
+    ${c.rec?'<span class="rec">RECOMMENDED</span>':''}
+    ${c.preview?'<span class="pvbadge">PREVIEW</span>':''}
     <div style="height:48px;display:flex;align-items:flex-end">${robot(c.vendor,'idle')}</div>
     <div class="nm">${esc(c.label)}</div>
     <span class="tier ${tier}">${tier==='untrust'?'untrusted':c.profile}</span>
     <div class="id">${esc(c.model)}</div></div>`;
 }
 function hintFor(){
+  const c=selectedCard();
+  if(sel.live)return '🔴 LIVE MODE — when you approve, the post is published to X for real (@lumorasleep). Everything up to that point stays an offline dry-run.';
   if(sel.model==='sketchy')return '⚠ SketchyAgent v0 is untrusted — watch it fail the gauntlet and get refused.';
   if(sel.inject==='held')return '⚠ a medical claim will be injected — watch the rehearsal panel HOLD it.';
   if(sel.inject==='faulty')return '⚠ a faulty judge will hallucinate a citation — watch meta_check catch it.';
+  if(c&&c.real)return `⚡ REAL run — real Tavily research, a real ${esc(c.label)} draft, and a real review panel. Takes ~30–90s and uses tokens; it stops for your approval (dry-run unless LIVE).`;
   if(!sel.human)return 'human approval OFF: on unanimous consent it will auto-post (dry-run).';
-  return 'clean run — it will stop for your approval before posting.';
+  return 'preview run — deterministic, no API spend. It stops for your approval before posting.';
 }
 
 /* ===== GAUNTLET — pixel arcade admission game ===== */
@@ -919,11 +956,21 @@ function rehearsalContent(auto){
           <div class="xacts"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span><span>🔖</span></div>
           ${rs.state==='held'?'<div class="xheld-stamp">HELD</div>':''}</div></div>
         ${consent}
+        ${rs.state!=='go'?`<div class="xintervene">
+          <div class="hi-h">✋ Human intervention required</div>
+          <div class="hi-s">The agent retried and still couldn't get a clean draft, so the harness held it (fail-closed). Step in: tell the writer what to change and re-run.</div>
+          <textarea id="hicorr" placeholder="e.g. drop the medical framing, lead with the ritual, keep every stat cited…"></textarea>
+          <button class="btn red" id="hisend">Send guidance &amp; re-run</button></div>`:''}
         <div class="xreplab">Replies from the <b>review panel</b> — the digital twin shows each judge's verdict as a reply</div>
         <div id="xreplies">${judges.map(j=>xReply(j,rs.spans)).join('')}</div>
       </div>
       ${xRail()}</div></div>`;
   const rn=$('#rnext');if(rn)rn.onclick=()=>setPhase('approval');
+  const hs=$('#hisend');if(hs)hs.onclick=async()=>{const t=($('#hicorr').value||'').trim();if(!t){alert('type guidance first');return;}
+    hs.disabled=true;hs.textContent='re-running…';
+    let j;try{j=await J('/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...runParams(),correction:t})});}catch(e){j=null;}
+    if(!j||!j.ok){hs.disabled=false;hs.textContent='Send guidance & re-run';alert((j&&j.reason)||'failed');return;}
+    critiques.push(t);runId=j.run_id;played.clear();seenSeq.clear();t0=null;failAt=null;setPhase('write');tick();};
   if(auto){
     if(rs.state==='go'){scanReplies(judges,()=>startAuto(3,()=>setPhase('approval'),'#rnext','▶ FINAL APPROVAL'));}
     else{scanReplies(judges,()=>{});failAt='rehearsal';renderStepper();}
@@ -963,15 +1010,16 @@ function approvalContent(){
       <div style="font-size:17px;margin:8px 0">${esc(stripCites(post.text||''))}</div>
       <div style="display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--faint);border-top:1px solid var(--hair);padding-top:8px">
         <span>agent ${esc(sel.label||'')}</span><span>egress disabled</span><span>panel ${approves}/${judges.length} approve</span>
-        ${view.cost&&view.cost.present?`<span class="cost" style="color:var(--cyan)">$${(view.cost.estimated_cost_usd||0).toFixed(4)} est</span>`:''}</div></div>`;
+        ${view.cost&&view.cost.present?`<span class="cost" style="color:var(--cyan)">${(view.cost.total_tokens||0).toLocaleString()} tok · $${(view.cost.estimated_cost_usd||0).toFixed(4)}</span>`:''}</div></div>`;
   let action;
   if(posted){
     action=postedCard();
   }else if(view.awaiting){
     action=`<p class="sub">the panel reached unanimous consent — you may approve.</p>
+      ${sel.live?'<div class="glass" style="border-color:rgba(255,84,102,.45);color:var(--no);margin:8px 0;font-family:var(--mono);font-size:12px">🔴 LIVE MODE — approving publishes to X for real (@lumorasleep).</div>':''}
       <div style="display:flex;gap:12px;margin-top:10px">
-        <button class="btn go" id="pass" ${eligible?'':'disabled'} style="flex:1">Pass & post</button>
-        <button class="btn red" id="fail" style="flex:1">Fail & revise</button></div>
+        <button class="btn go" id="pass" ${eligible?'':'disabled'} style="flex:1">${sel.live?'Pass &amp; post LIVE 🔴':'Pass &amp; post'}</button>
+        <button class="btn red" id="fail" style="flex:1">Fail &amp; revise</button></div>
       ${eligible?'':'<div class="hint">the harness will not post a held draft. send it back instead.</div>'}
       <div id="revbox"></div>`;
   }else{
@@ -991,20 +1039,22 @@ function critiqueMemory(){
     ${critiques.map((c,i)=>`<div style="font-family:var(--mono);font-size:12px;color:var(--dim);padding:3px 0">${i+1}. ${esc(c)}</div>`).join('')}</div>`;
 }
 function postedCard(){
-  const post=view.post||{};
-  return `<div class="glass" style="border-color:rgba(53,255,158,.4)">
-    <div style="color:var(--go);font-weight:600">● Posted · dry run${!sel.human?' · <span style="font-family:var(--mono);font-size:11px;color:var(--cyan)">AUTO-APPROVED (human gate off)</span>':''}</div>
-    <p class="sub" style="margin:6px 0">Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.</p>
-    <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep/status/${esc(post.post_id||'0')}" target="_blank">🔗 x.com/lumorasleep/status/${esc(post.post_id||'0')} (dry-run)</a>
+  const post=view.post||{};const live=!!post.live;
+  return `<div class="glass" style="border-color:${live?'rgba(255,84,102,.45)':'rgba(53,255,158,.4)'}">
+    <div style="color:${live?'var(--no)':'var(--go)'};font-weight:600">● ${live?'Posted · LIVE on X':'Posted · dry run'}${(!sel.human&&!live)?' · <span style="font-family:var(--mono);font-size:11px;color:var(--cyan)">AUTO-APPROVED (human gate off)</span>':''}</div>
+    <p class="sub" style="margin:6px 0">${live?'Published to X for real. A takedown is armed — use it to delete the live post.':'Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.'}</p>
+    <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep/status/${esc(post.post_id||'0')}" target="_blank">🔗 x.com/lumorasleep/status/${esc(post.post_id||'0')}${live?'':' (dry-run)'}</a>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn ghost" id="dlj">⤓ audit.json</button>
       <button class="btn ghost" id="dlh">⎙ report</button>
-      ${view.can_takedown?'<button class="btn red" id="tkd">Take down (rollback)</button>':''}
+      ${view.can_takedown?`<button class="btn red" id="tkd">${live?'Delete live post':'Take down (rollback)'}</button>`:''}
       <button class="btn" id="again" style="margin-left:auto">Run another mission</button></div></div>`;
 }
 function wireApproval(){
-  const pass=$('#pass');if(pass)pass.onclick=async()=>{pass.disabled=true;pass.textContent='posting…';
-    const j=await J('/api/runs/'+runId+'/approve',{method:'POST'});
+  const pass=$('#pass');if(pass)pass.onclick=async()=>{
+    if(sel.live&&!confirm('Publish this post to X for REAL, right now, as @lumorasleep?\n\nThis is a live, public post.'))return;
+    pass.disabled=true;pass.textContent=sel.live?'publishing to X…':'posting…';
+    const j=await J('/api/runs/'+runId+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:sel.live})});
     if(!j.ok){pass.disabled=false;pass.textContent='Pass & post';alert(j.reason||'refused');}else{await tick();playApproval();}};
   const fail=$('#fail');if(fail)fail.onclick=()=>{
     $('#revbox').innerHTML=`<div class="glass" style="margin-top:12px"><div class="field-lbl" style="margin:0 0 8px">what should the writer change?</div>
