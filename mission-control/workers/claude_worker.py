@@ -251,13 +251,20 @@ class RealJudge(Worker):
                 return {"text": raw[:500]}
 
         system, user = _review_prompt(task, self.cfg.strictness)
-        raw, _ = _call_model(self.cfg.provider, self.cfg.model, self.cfg.base_url,
-                             self.cfg.env_key, system, user)
+        t0 = time.time()
+        raw, tokens = _call_model(self.cfg.provider, self.cfg.model, self.cfg.base_url,
+                                  self.cfg.env_key, system, user)
         try:
-            return parse_json_loose(raw)
+            verdict = parse_json_loose(raw)
         except Exception:
             # A malformed verdict will be caught by meta_check -> REVIEWER_FAULT.
-            return {"_parse_error": raw[:200]}
+            verdict = {"_parse_error": raw[:200]}
+        # Telemetry for the cost meter. These underscored keys are top-level and
+        # meta_check only inspects criteria/overall/reasons/citations, so they are
+        # safely ignored by the audit while still being persisted on the verdict.
+        verdict["_tokens"] = tokens
+        verdict["_seconds"] = round(time.time() - t0, 3)
+        return verdict
 
 
 def build_real_worker(role: str, preset_key: Optional[str] = None) -> Optional[Worker]:

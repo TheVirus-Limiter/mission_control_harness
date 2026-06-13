@@ -75,6 +75,7 @@ select:hover{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(63,224,255,.1)}
 .tile .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
 .tile .v{font-family:var(--disp);font-weight:700;font-size:22px;margin-top:3px;line-height:1}
 .v.go{color:var(--go)} .v.no{color:var(--no)} .v.hold{color:var(--hold)} .v.cy{color:var(--cyan)}
+.costsub{font-size:11px;color:var(--faint);font-weight:600} .costsub2{font-size:10px;color:var(--mut);font-family:var(--mono);margin-top:4px}
 .statusdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
 .sd-go{background:var(--go);box-shadow:0 0 12px var(--go)} .sd-no{background:var(--no);box-shadow:0 0 12px var(--no)}
 .sd-hold{background:var(--hold);box-shadow:0 0 12px var(--hold)} .sd-run{background:var(--cyan);box-shadow:0 0 12px var(--cyan);animation:pulse 1.3s infinite}
@@ -402,12 +403,19 @@ function renderStats(d){
     tile('Mission',esc(d.mission),'cy','glass')+
     tile('Agents certified',d.agents_certified,'cy','glass')+
     tile('Alarms',(d.alarms||[]).length,(d.alarms||[]).length?'no':'go','glass')+
+    costTile(d.cost)+
     (d.rehearsal_proof?tile('Rehearsal','🔒 egress '+esc(d.rehearsal_proof.egress),'cy','glass'):'');
   const ap=$('#apill'),n=(d.alarms||[]).length;ap.hidden=!n;ap.textContent=n;
   ap.className='pill'+((d.alarms||[]).some(a=>a.severity==='critical')?' crit':'');
   renderRail(d);
 }
 function tile(k,v,cls,extra){return `<div class="tile ${extra}"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div></div>`;}
+function costTile(c){if(!c||!c.present)return '';
+  const usd=(c.estimated_cost_usd||0),s=(c.wall_clock_s||0),t=(c.total_tokens||0);
+  const v=`$${usd.toFixed(4)} <span class="costsub">~est</span>`;
+  const sub=`${s}s · ${t.toLocaleString()} tok`;
+  return `<div class="tile glass" title="${esc(c.price_basis||'')}"><div class="k">Cost / latency</div>
+    <div class="v cy">${v}</div><div class="costsub2">${sub}</div></div>`;}
 
 // Trust lifecycle: ADMISSION -> REHEARSAL -> ACTION, always visible.
 function lifecycle(d){
