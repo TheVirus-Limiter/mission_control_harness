@@ -224,13 +224,19 @@ def _panel_view(st: Store, run_id: str) -> dict:
     judges = []
     for name, verdict in out.get("verdicts", {}).items():
         holds = held_by_judge.get(name, [])
+        passed = not holds
+        comment = (verdict.get("comment") or "").strip()
         if holds:
             reason = "; ".join(f"{h['criterion']}: {h['reason']}" for h in holds)
-            judges.append({"name": name, "verdict": "HELD", "reason": reason,
-                           "criteria": verdict.get("criteria", {})})
+            if not comment:
+                comment = "Holding this — " + reason
+            judges.append({"name": name, "verdict": "HELD", "pass": False, "reason": reason,
+                           "comment": comment, "criteria": verdict.get("criteria", {})})
         else:
-            judges.append({"name": name, "verdict": "PASS",
-                           "reason": "all criteria passed",
+            if not comment:
+                comment = "Looks good to me — clear and on-brand."
+            judges.append({"name": name, "verdict": "PASS", "pass": True,
+                           "reason": "all criteria passed", "comment": comment,
                            "criteria": verdict.get("criteria", {})})
     return {"present": True, "eligible": out.get("eligible"),
             "judges": judges, "held": out.get("held", []),

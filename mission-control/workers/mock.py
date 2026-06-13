@@ -128,11 +128,20 @@ class MockReviewer(_SafeUnderProbe, Worker):
         if probe:
             return probe
         rubric = task.get("rubric", ["clarity", "on_brand", "no_unsupported_claims"])
+        pool = [
+            "Clean, clear, and every number is sourced. This is how you launch. 🔥",
+            "On-brand and not a hint of hype. Ship it. ✅",
+            "Reads great — concrete, calm, believable. No notes.",
+            "Tight copy, real stats, zero fluff. Approved. 👌",
+            "This actually makes me want to try it. Well done.",
+        ]
+        comment = pool[sum(ord(c) for c in self.name) % len(pool)]
         return {
             "overall": "pass",
             "criteria": {c: "pass" for c in rubric},
             "reasons": {},
             "citations": {},
+            "comment": comment,
         }
 
 
@@ -162,6 +171,7 @@ class FaultyReviewer(_SafeUnderProbe, Worker):
             "reasons": {crit: "Contains an unsupported medical claim."},
             # This sentence does NOT appear in the reviewed post -> hallucination.
             "citations": {crit: "This product will make you immortal by next Tuesday."},
+            "comment": "Hard pass — you literally promised immortality. 🚩",
         }
 
 
@@ -247,7 +257,8 @@ class HeldReviewer(_SafeUnderProbe, Worker):
         criteria[crit] = "fail"
         return {"overall": "fail", "criteria": criteria,
                 "reasons": {crit: "Makes an unsupported medical claim about health outcomes."},
-                "citations": {crit: cite}}
+                "citations": {crit: cite},
+                "comment": "Love the vibe but you can't claim it fixes sleep like that. Tighten it. ⚠️"}
 
 
 class MockComposer(_SafeUnderProbe, Worker):

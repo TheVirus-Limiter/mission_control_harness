@@ -56,7 +56,11 @@ def parse_json_loose(raw: str) -> dict:
     i, j = s.find("{"), s.rfind("}")
     if i != -1 and j != -1 and j > i:
         s = s[i:j + 1]
-    return json.loads(s)
+    obj = json.loads(s)
+    if not isinstance(obj, dict):
+        # a bare string/list/number is not a usable payload
+        raise ValueError("parsed JSON is not an object")
+    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -132,13 +136,17 @@ def _write_prompt(task: dict, feedback: Optional[str]) -> tuple[str, str]:
 def _review_prompt(task: dict, strictness: str) -> tuple[str, str]:
     rubric = task.get("rubric", [])
     system = (
-        "You are an independent content reviewer. Output JSON ONLY with this exact schema:\n"
+        "You are a real person on X reviewing a brand's draft tweet. Output JSON ONLY:\n"
         '{"overall":"pass|fail","criteria":{<criterion>:"pass|fail"},'
-        '"reasons":{<criterion>:str},"citations":{<criterion>:str}}\n'
+        '"reasons":{<criterion>:str},"citations":{<criterion>:str},"comment":str}\n'
         f"The criteria keys MUST be exactly: {rubric}.\n"
-        "For EVERY criterion you mark \"fail\" you MUST provide a reason AND a citation that "
-        "is a sentence copied VERBATIM from the post (an exact substring). Never cite text "
-        "that is not in the post. " + STRICTNESS_RULES.get(strictness, STRICTNESS_RULES["normal"])
+        "For EVERY criterion you mark \"fail\" you MUST give a reason AND a citation that is a "
+        "sentence copied VERBATIM from the post (an exact substring); never cite text not in "
+        "the post. "
+        "\"comment\" is a SHORT, natural reply (max ~120 chars) you'd actually post as a reader "
+        "reacting to this tweet -- punchy and human, matching your verdict (encouraging if it "
+        "passes, calling out the problem if you hold it). No hashtags spam. "
+        + STRICTNESS_RULES.get(strictness, STRICTNESS_RULES["normal"])
     )
     user = f"Review this post:\n\"\"\"\n{task.get('text')}\n\"\"\""
     return system, user
@@ -227,12 +235,21 @@ class RealJudge(Worker):
             return {"_parse_error": raw[:200]}
 
 
-def build_real_worker(role: str) -> Optional[Worker]:
-    """Build a real researcher/writer for the first provider whose key is set.
-    Returns None if no key is available (engine falls back to a mock)."""
+def build_real_worker(role: str, preset_key: Optional[str] = None) -> Optional[Worker]:
+    """Build a real researcher/writer. If a preset key is given (and its API key
+    is present) that exact model runs the pipeline; otherwise fall back to the
+    first available provider. Returns None if nothing is available."""
     if role not in ("research", "researcher", "write", "writer"):
         return None
     norm = "research" if role.startswith("research") else "write"
+
+    if preset_key:
+        from models.judges import get_preset
+
+        p = get_preset(preset_key)
+        if p and os.environ.get(p.env_key):
+            return RealWorker(norm, p.provider, p.model, p.base_url, p.env_key)
+
     for provider, model, base_url, env_key in PROVIDER_PREFERENCE:
         if os.environ.get(env_key):
             return RealWorker(norm, provider, model, base_url, env_key)

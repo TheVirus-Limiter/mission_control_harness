@@ -29,7 +29,7 @@ def test_one_judge_per_present_key(monkeypatch):
     _clear_keys(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "fake-key-not-called")
     judges = build_real_judges()
-    assert len(judges) == 1 and judges[0].name == "anthropic-claude"
+    assert len(judges) == 1 and judges[0].name == "Claude Haiku 4.5"
     assert judges[0].available is True  # construction only; no network call
 
 
@@ -65,9 +65,11 @@ def test_one_nvidia_key_activates_the_nim_bunch(monkeypatch):
 
 
 def test_nim_catalog_spans_many_families():
+    # All ids are verified-live; the barrage spans multiple model families.
     ids = " ".join(model for _, model, _ in NIM_CATALOG).lower()
-    for family in ("deepseek", "mistral", "qwen", "gemma", "phi", "llama", "nemotron"):
+    for family in ("llama", "mixtral", "phi", "qwen", "gpt-oss"):
         assert family in ids, f"expected a {family} model in the NIM catalog"
+    assert len(NIM_CATALOG) >= 6
 
 
 def test_max_judges_caps_the_panel(monkeypatch):

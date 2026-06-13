@@ -1,21 +1,15 @@
-"""Judge configuration for the Rehearsal panel.
+"""Model registry — judges AND pipeline presets.
 
-The panel is DECLARED here, not in the engine. Each judge is a different
-provider/model at a declared strictness profile. Swapping a model, adding a
-judge, or changing a strictness profile is a one-line edit in this file and
-requires NO change to the harness -- that is the swappability guarantee for the
-review side.
+Every entry is a different provider/model. The same registry is used two ways:
+  * the Rehearsal panel draws its multi-model jury from it (build_real_judges),
+  * the pipeline worker (researcher/writer) can be ANY one of them via --preset.
 
-NVIDIA NIM is the clearest demonstration of this: a whole catalog of open models
-(DeepSeek, Mistral/Mixtral, Qwen, Gemma, Phi, Llama, Nemotron, ...) is served
-through the SAME OpenAI-compatible endpoint with a SINGLE `NVIDIA_API_KEY`, so
-one key lights up the entire bunch. Browse the catalog at
-https://build.nvidia.com/explore/discover and paste the model id below.
+NVIDIA NIM rides the OpenAI-compatible endpoint, so one NVIDIA_API_KEY lights up
+the whole NVIDIA barrage. Every model id below was verified live against the NIM
+catalog (stale ids were dropped). Add one: drop a line in PRESETS, no harness
+change -- that is the swappability guarantee made literal.
 
-Strictness is declared config, not a vibe: each profile maps to an explicit
-instruction block (see STRICTNESS_RULES in workers/claude_worker.py) that
-changes how aggressively a criterion is failed. Every judge still returns a
-verdict over the FULL declared rubric, so meta_check can audit it.
+Strictness is declared config (see STRICTNESS_RULES in workers/claude_worker.py).
 """
 
 from __future__ import annotations
@@ -24,93 +18,98 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
+OLLAMA_DEFAULT = "http://localhost:11434/v1"
+
 
 @dataclass(frozen=True)
 class JudgeConfig:
-    name: str          # display name shown on the reviewer card + timeline
+    name: str          # display name (reviewer card + timeline)
     provider: str      # "anthropic" | "openai" | "nvidia" | "ollama"
     model: str
-    env_key: str       # which env var must be present for this judge to run
+    env_key: str
     base_url: Optional[str] = None
     strictness: str = "normal"   # "strict" | "normal" | "lenient"
+    key: str = ""      # short cli/ui key for --preset
+    vendor: str = ""   # for UI grouping/icon: anthropic/openai/meta/mistral/...
 
 
-# NVIDIA NIM speaks the OpenAI protocol on this endpoint. One key, many models.
-NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
-
-# The NVIDIA NIM catalog. Each tuple is (display name, NIM model id, strictness).
-# All of these are gated by a single NVIDIA_API_KEY, so providing it activates
-# every one of them in the panel. Add/remove a line -> the panel changes, the
-# harness does not.
-NIM_CATALOG: list[tuple[str, str, str]] = [
-    ("nim-nemotron-70b",        "nvidia/llama-3.1-nemotron-70b-instruct",   "strict"),
-    ("nim-deepseek-r1",         "deepseek-ai/deepseek-r1",                  "strict"),
-    ("nim-deepseek-r1-distill", "deepseek-ai/deepseek-r1-distill-qwen-32b", "normal"),
-    ("nim-llama-3.1-405b",      "meta/llama-3.1-405b-instruct",             "strict"),
-    ("nim-llama-3.3-70b",       "meta/llama-3.3-70b-instruct",              "normal"),
-    ("nim-mistral-large",       "mistralai/mistral-large-2-instruct",       "normal"),
-    ("nim-mixtral-8x22b",       "mistralai/mixtral-8x22b-instruct-v0.1",    "normal"),
-    ("nim-mistral-7b",          "mistralai/mistral-7b-instruct-v0.3",       "lenient"),
-    ("nim-qwen2.5-coder-32b",   "qwen/qwen2.5-coder-32b-instruct",          "normal"),
-    ("nim-gemma-2-27b",         "google/gemma-2-27b-it",                    "normal"),
-    ("nim-phi-3.5-moe",         "microsoft/phi-3.5-moe-instruct",           "lenient"),
+# The declared barrage. Anthropic + OpenAI + a verified spread of NVIDIA NIM
+# models (Meta Llama, Mistral, Microsoft Phi, OpenAI gpt-oss, Qwen).
+PRESETS: list[JudgeConfig] = [
+    JudgeConfig("Claude Haiku 4.5", "anthropic", "claude-haiku-4-5-20251001",
+                "ANTHROPIC_API_KEY", None, "normal", "claude", "anthropic"),
+    JudgeConfig("GPT-4o mini", "openai", "gpt-4o-mini",
+                "OPENAI_API_KEY", None, "normal", "gpt", "openai"),
+    JudgeConfig("Llama 3.3 70B", "nvidia", "meta/llama-3.3-70b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "llama33", "meta"),
+    JudgeConfig("Llama 3.1 70B", "nvidia", "meta/llama-3.1-70b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "llama31", "meta"),
+    JudgeConfig("Llama 3.1 8B", "nvidia", "meta/llama-3.1-8b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama31s", "meta"),
+    JudgeConfig("Llama 3.2 3B", "nvidia", "meta/llama-3.2-3b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama32", "meta"),
+    JudgeConfig("Llama 4 Maverick", "nvidia", "meta/llama-4-maverick-17b-128e-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "llama4", "meta"),
+    JudgeConfig("Mixtral 8x7B", "nvidia", "mistralai/mixtral-8x7b-instruct-v0.1",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "mixtral", "mistral"),
+    JudgeConfig("Phi-4 mini", "nvidia", "microsoft/phi-4-mini-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "phi4", "microsoft"),
+    JudgeConfig("GPT-OSS 20B", "nvidia", "openai/gpt-oss-20b",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "gptoss", "openai"),
+    JudgeConfig("Qwen3 Next 80B", "nvidia", "qwen/qwen3-next-80b-a3b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "qwen3", "qwen"),
+    JudgeConfig("Nemotron Super 49B", "nvidia", "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "nemotron", "nvidia"),
+    JudgeConfig("GLM 5.1", "nvidia", "z-ai/glm-5.1",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "glm", "zai"),
+    JudgeConfig("Mistral Large 3", "nvidia", "mistralai/mistral-large-3-675b-instruct-2512",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "mistral-lg", "mistral"),
 ]
 
-# Optional LOCAL judges via Ollama. Ollama is a local runtime (not a NIM model),
-# also OpenAI-compatible. These activate only when OLLAMA_HOST is set, e.g.
-#   OLLAMA_HOST=http://localhost:11434/v1
-OLLAMA_CATALOG: list[tuple[str, str, str]] = [
-    ("ollama-llama3.1", "llama3.1",    "normal"),
-    ("ollama-mistral",  "mistral",     "normal"),
-    ("ollama-deepseek", "deepseek-r1", "strict"),
+# Back-compat alias: the panel IS the preset roster.
+PANEL = PRESETS
+BY_KEY = {p.key: p for p in PRESETS}
+
+# (label, model, strictness) view of the NVIDIA barrage, for docs/tests.
+NIM_CATALOG = [(p.name, p.model, p.strictness) for p in PRESETS if p.provider == "nvidia"]
+
+# Optional LOCAL judges via Ollama, activated only when OLLAMA_HOST is set.
+OLLAMA_CATALOG = [
+    ("ollama-llama3.1", "llama3.1", "normal"),
+    ("ollama-mistral", "mistral", "normal"),
 ]
 
 
-def _nim_judges() -> list[JudgeConfig]:
-    return [JudgeConfig(name, "nvidia", model, "NVIDIA_API_KEY", NIM_ENDPOINT, strict)
-            for (name, model, strict) in NIM_CATALOG]
+def get_preset(key: str) -> Optional[JudgeConfig]:
+    return BY_KEY.get(key)
 
 
-def _ollama_judges() -> list[JudgeConfig]:
-    return [JudgeConfig(name, "ollama", model, "OLLAMA_HOST", None, strict)
-            for (name, model, strict) in OLLAMA_CATALOG]
-
-
-# One hosted judge per major provider, then the whole NIM bunch.
-CORE: list[JudgeConfig] = [
-    JudgeConfig("anthropic-claude", "anthropic", "claude-haiku-4-5-20251001",
-                "ANTHROPIC_API_KEY", None, "normal"),
-    JudgeConfig("openai-gpt", "openai", "gpt-4o-mini",
-                "OPENAI_API_KEY", None, "normal"),
-]
-
-# The declared panel: Anthropic + OpenAI + every NVIDIA NIM model. (Ollama is
-# appended at build time only when OLLAMA_HOST is set, so it stays opt-in.)
-PANEL: list[JudgeConfig] = CORE + _nim_judges()
+def available_presets() -> list[JudgeConfig]:
+    """Presets whose API key is actually present."""
+    return [p for p in PRESETS if os.environ.get(p.env_key)]
 
 
 def roster_names() -> list[str]:
-    """Display names of the full declared panel -- used to mirror the panel as a
-    mock bench (``--full-panel``) so the bunch is visible without any API key."""
-    return [c.name for c in PANEL]
+    return [p.name for p in PRESETS]
+
+
+def _ollama_judges() -> list[JudgeConfig]:
+    return [JudgeConfig(n, "ollama", m, "OLLAMA_HOST", None, s, "ol-" + n, "ollama")
+            for (n, m, s) in OLLAMA_CATALOG]
 
 
 def build_real_judges(faulty_grader: bool = False) -> list:
-    """Instantiate one real judge per config whose key/host is present. Judges
-    whose key is missing are skipped (graceful degradation). A single
-    NVIDIA_API_KEY activates the entire NIM bunch. Set MAX_JUDGES to cap the
-    panel size for cost control. Returns [] if nothing is available, so the
-    engine falls back to the deterministic mock panel."""
+    """One real judge per config whose key/host is present. A single
+    NVIDIA_API_KEY activates the whole barrage. MAX_JUDGES caps panel size to
+    bound cost (default 6). Returns [] if nothing available -> engine uses mocks."""
     from workers.claude_worker import RealJudge
 
-    roster = list(PANEL)
+    roster = list(PRESETS)
     if os.environ.get("OLLAMA_HOST"):
         roster += _ollama_judges()
-
     judges = [RealJudge(cfg) for cfg in roster if os.environ.get(cfg.env_key)]
 
-    # Cap panel size to bound real-model cost (admission probes EVERY judge 5x).
-    # Defaults to 6; set MAX_JUDGES to raise/lower it.
     limit = 6
     cap = os.environ.get("MAX_JUDGES")
     if cap:
@@ -121,9 +120,6 @@ def build_real_judges(faulty_grader: bool = False) -> list:
     judges = judges[:limit]
 
     if faulty_grader and judges:
-        # For `--real --faulty-grader` swap in the deterministic faulty judge so
-        # meta_check still has a broken grader to catch.
         from workers.mock import FaultyReviewer
-
-        judges[0] = FaultyReviewer(judges[0].name + " (FAULTY)")
+        judges[0] = FaultyReviewer(judges[0].name + " [FAULTY]")
     return judges

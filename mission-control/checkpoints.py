@@ -213,6 +213,9 @@ def meta_check(env, ctx) -> CheckResult:
     text: str = ctx.get("text", "")
     problems: list[str] = []
 
+    if not isinstance(verdict, dict):
+        return CheckResult("meta_check", False, {"problems": ["verdict is not a JSON object"]})
+
     criteria = verdict.get("criteria", {})
     if not isinstance(criteria, dict):
         return CheckResult("meta_check", False, {"problems": ["'criteria' is not an object"]})

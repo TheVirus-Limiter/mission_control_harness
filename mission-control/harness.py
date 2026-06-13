@@ -122,6 +122,7 @@ class Harness:
         reject_demo: bool = False,
         block_demo: bool = False,
         full_panel: bool = False,
+        preset: Optional[str] = None,
         approver=None,
     ):
         self.mission_path = mission_path
@@ -135,6 +136,7 @@ class Harness:
         self.reject_demo = reject_demo
         self.block_demo = block_demo
         self.full_panel = full_panel
+        self.preset = preset
         self.budgets = self.mission.get("budgets", {})
         self.input = self.mission.get("input", {})
         self.handle = self.input.get("handle", "@yourbrand")
@@ -152,9 +154,17 @@ class Harness:
         beyond the Worker interface, which is what makes them swappable."""
         if self.real:
             try:
+                # Researcher: prefer REAL web search (Tavily) over model memory.
+                if role in ("researcher", "research") and os.environ.get("TAVILY_API_KEY"):
+                    from workers.tavily import TavilyResearcher
+
+                    tav = TavilyResearcher()
+                    if tav.available:
+                        return tav
+
                 from workers.claude_worker import build_real_worker
 
-                w = build_real_worker(role)
+                w = build_real_worker(role, preset_key=self.preset)
                 if w is not None and w.available:
                     return w
                 console.print(f"[yellow]![/] real worker for '{role}' unavailable -- using mock")
@@ -178,24 +188,29 @@ class Harness:
         return cls()
 
     # -- Gate 1: certify an agent before trusting it with any work ----------
-    def ensure_certified(self, worker: Worker, run_id: str) -> None:
-        """Run the Admission gauntlet (once per worker per run). Refuse to use an
-        agent that did not survive every attack -- fail closed."""
-        if self._certified.get(worker.name):
-            return
-        cert = self.proving_ground.certify(worker, run_id)
-        self._certified[worker.name] = cert.certified
-        if not cert.certified:
-            failed = [a.attack for a in cert.failed]
-            alarm = Alarm(
+    def ensure_certified(self, worker: Worker, run_id: str, fatal: bool = True) -> bool:
+        """Run the Admission gauntlet (once per worker per run). A PIPELINE agent
+        that fails is refused (fatal -> halt). A JUDGE that fails is simply not
+        seated on the jury (fatal=False -> returns False). Returns whether the
+        agent is certified."""
+        cached = self._certified.get(worker.name)
+        if cached is None:
+            cert = self.proving_ground.certify(worker, run_id)
+            cached = cert.certified
+            self._certified[worker.name] = cached
+            if not cached:
+                failed = [a.attack for a in cert.failed]
+                alarm = Alarm(AlarmType.CERTIFICATION_FAILED,
+                              f"agent '{worker.name}' failed Admission on {failed}", "admission")
+                self.store.log(run_id, "admission", "alarm", alarm.type.value, ok=False,
+                               detail={**alarm.as_dict(), "failed_attacks": [
+                                   {"attack": a.attack, "leaked": a.evidence} for a in cert.failed]})
+        if not cached and fatal:
+            raise HarnessHalt(Alarm(
                 AlarmType.CERTIFICATION_FAILED,
-                f"agent '{worker.name}' failed Admission on {failed}; refusing to assign it to a stage",
-                "admission",
-            )
-            self.store.log(run_id, "admission", "alarm", alarm.type.value, ok=False,
-                           detail={**alarm.as_dict(), "failed_attacks": [
-                               {"attack": a.attack, "leaked": a.evidence} for a in cert.failed]})
-            raise HarnessHalt(alarm)
+                f"agent '{worker.name}' failed Admission; refusing to assign it to a stage",
+                "admission"))
+        return cached
 
     def assign_worker(self, stage: dict, run_id: str) -> Worker:
         """Assign a worker to a stage -- but only after Admission certifies it."""
@@ -360,9 +375,13 @@ class Harness:
     def run_rehearsal_stage(self, stage: dict, run_id: str, accumulated: dict) -> dict:
         name = stage["name"]
         self.store.log(run_id, name, "stage", "start", detail={"gate": "digital-twin + panel"})
-        judges = self.build_judges()
-        for judge in judges:  # judges are agents too -- certify them before trusting them
-            self.ensure_certified(judge, run_id)
+        # Judges are agents too: each runs the gauntlet. A judge that fails is
+        # NOT seated on the jury (the barrage is shown, untrusted models excluded).
+        judges = [j for j in self.build_judges() if self.ensure_certified(j, run_id, fatal=False)]
+        if not judges:
+            raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
+                                    "no judge survived Admission; the review panel cannot be seated",
+                                    "rehearsal"))
 
         rehearsal = Rehearsal(self.store, self.guardrails, self.rubric,
                               reviewer_retries=int(self.budgets.get("reviewer_retries", 2)),
@@ -704,6 +723,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                    help="demo: an unsupported medical claim is HELD at Rehearsal and never posts")
     p.add_argument("--full-panel", action="store_true",
                    help="show the full declared judge roster (Anthropic + OpenAI + the NVIDIA NIM bunch) as mock judges")
+    p.add_argument("--preset", default=None,
+                   help="which model runs the pipeline (e.g. claude, gpt, llama33, llama4, mixtral, phi4, gptoss, qwen3). Implies --real.")
+    p.add_argument("--list-presets", action="store_true", help="list available model presets and exit")
     p.add_argument("--replay-from", default=None, help="resume a saved run from this stage")
     p.add_argument("--run", default=None, help="run id to replay")
     p.add_argument("--yes", action="store_true", help="auto-approve the human hold (non-interactive)")
@@ -713,6 +735,15 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # Load mission-control/.env so credentials in that file are picked up.
     load_dotenv()
+
+    if args.list_presets:
+        from models.judges import PRESETS
+
+        console.print("[bold cyan]Model presets[/] (✓ = key present)")
+        for p in PRESETS:
+            ok = "[green]✓[/]" if os.environ.get(p.env_key) else "[dim]·[/]"
+            console.print(f"  {ok} [bold]{p.key:10}[/] {p.name:18} [dim]{p.vendor}/{p.provider}:{p.model}[/]")
+        return 0
 
     if args.verify_x:
         from gates.action import verify_x_credentials
@@ -741,13 +772,15 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     store = Store(args.db)
     approver = auto_approver if args.yes else _cli_approver
+    use_real = args.real or bool(args.preset)
     code = 0
     run_id = args.run
     h = None
     try:
-        h = Harness(args.mission, store, real=args.real,
+        h = Harness(args.mission, store, real=use_real,
                     faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
-                    block_demo=args.block_demo, full_panel=args.full_panel, approver=approver)
+                    block_demo=args.block_demo, full_panel=args.full_panel,
+                    preset=args.preset, approver=approver)
         run_id = h.run(run_id=args.run, replay_from=args.replay_from)
     except HarnessHalt as halt:
         run_id = run_id or getattr(h, "last_run_id", None)
