@@ -240,4 +240,26 @@ same db file, and confirms `research` and `write` are reused, not recomputed.
 | 7 | swappability (mission + judge model) | `test_swappability`, `test_m2_real` |
 | 8 | safe by default (dry-run, no real post) | `test_dry_run_is_default` |
 
-Run `pytest -q` — 38 tests, all green.
+Run `pytest -q` — 59 tests, all green.
+
+---
+
+## 11. Hardening (post-audit)
+
+A multi-agent review drove a round of safety/correctness hardening:
+
+* **Live posting needs a *human*, not just a flag.** A real post requires
+  `DRY_RUN=0` + X creds + an **interactive** approval. `--yes`, tests, and the
+  dashboard auto-path are non-interactive and are downgraded to dry-run — closing
+  the `--real --yes` foot-gun.
+* **`--real` fails closed.** If no real judge panel can be built, the harness
+  escalates rather than silently substituting always-pass mock judges.
+* **`meta_check` is airtight.** A failing criterion with no verbatim citation is
+  itself a fault (the audit can't be bypassed by omission).
+* **Clean channel, byte-identical rehearsal.** Inline `[fN]` provenance tokens are
+  stripped via `to_channel()` for the posted text; `grounding` runs on the
+  un-stripped draft, and Rehearsal + Action build from the same channel string.
+* **Operational robustness.** Mission YAML is validated on load; LLM calls carry
+  timeouts; `MAX_JUDGES` defaults to a sane cap; real X HTTP errors become
+  structured alarms; the store uses WAL + locked reads; replay reuses only
+  stages with a recorded pass.

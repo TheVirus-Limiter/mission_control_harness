@@ -108,7 +108,7 @@ Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
 ## Tests
 
 ```bash
-pytest -q          # 38 tests: the deterministic guarantees in HARNESS.md §Acceptance
+pytest -q          # 59 tests: the deterministic guarantees in HARNESS.md §Acceptance
 ```
 
 ## Deploy
