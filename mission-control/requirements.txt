@@ -8,4 +8,5 @@ anthropic>=0.40
 openai>=1.40
 pytest>=8.0
 # Only needed for REAL posting to X (OAuth1 signing). Dry-run never imports it.
+requests>=2.31
 requests-oauthlib>=1.3

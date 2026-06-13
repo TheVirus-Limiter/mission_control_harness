@@ -61,7 +61,7 @@ from checkpoints import CONTENT_CHECK_ALARM, REGISTRY, STAGE_SCHEMAS
 from guardrails import Guardrails
 from materials import Envelope, Store
 from gates.admission import ProvingGround
-from gates.action import ActionGate, HumanDeclined, render_post
+from gates.action import ActionGate, HumanDeclined, render_post, to_channel
 from gates.rehearsal import Rehearsal, RehearsalEscalation
 from workers.base import Worker
 from workers.mock import (FaultyReviewer, HeldReviewer, MOCK_WORKERS, MedicalClaimWriter,
@@ -77,6 +77,35 @@ class HarnessHalt(Exception):
     def __init__(self, alarm: Alarm):
         super().__init__(alarm.context)
         self.alarm = alarm
+
+
+def _validate_mission(mission, path: str) -> None:
+    """Turn a malformed mission file into a clean, structured halt instead of a
+    raw KeyError/AttributeError deep in the engine."""
+    def bad(msg):
+        raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
+                                f"invalid mission '{path}': {msg}", "mission"))
+
+    if not isinstance(mission, dict):
+        bad("top-level YAML must be a mapping")
+    stages = mission.get("stages")
+    if not isinstance(stages, list) or not stages:
+        bad("missing or empty 'stages' list")
+    seen = set()
+    for i, s in enumerate(stages):
+        if not isinstance(s, dict) or not s.get("name"):
+            bad(f"stage #{i + 1} must be a mapping with a 'name'")
+        if s["name"] in seen:
+            bad(f"duplicate stage name '{s['name']}'")
+        seen.add(s["name"])
+        stype = s.get("type", "content")
+        if stype not in ("content", "rehearsal", "action"):
+            bad(f"stage '{s['name']}' has unknown type '{stype}'")
+        if stype == "content" and not s.get("worker"):
+            bad(f"content stage '{s['name']}' must declare a 'worker'")
+        for cp in s.get("checkpoints", []) or []:
+            if cp not in REGISTRY:
+                bad(f"stage '{s['name']}' lists unknown checkpoint '{cp}'")
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +127,7 @@ class Harness:
         self.mission_path = mission_path
         with open(mission_path, "r", encoding="utf-8") as f:
             self.mission = yaml.safe_load(f)
+        _validate_mission(self.mission, mission_path)
         self.guardrails = Guardrails.from_mission(self.mission)
         self.store = store
         self.real = real
@@ -176,15 +206,25 @@ class Harness:
     # -- the Rehearsal review panel (swappable; built from config) ----------
     def build_judges(self) -> list[Worker]:
         if self.real:
+            # In --real we must NOT silently fall back to always-pass mock judges:
+            # that would let a live run post content reviewed by a panel that
+            # structurally cannot HOLD. Fail closed instead.
             try:
                 from models.judges import build_real_judges
 
                 judges = build_real_judges(self.faulty_grader)
-                if judges:
-                    return judges
-                console.print("[yellow]![/] no real judges available -- using the mock panel")
-            except Exception as e:  # pragma: no cover - defensive
-                console.print(f"[yellow]![/] real judges unavailable ({e}) -- using the mock panel")
+            except Exception as e:
+                raise HarnessHalt(Alarm(
+                    AlarmType.ESCALATE_HUMAN,
+                    f"real review panel failed to build ({e}); refusing to proceed on mock judges",
+                    "rehearsal"))
+            if judges:
+                return judges
+            raise HarnessHalt(Alarm(
+                AlarmType.ESCALATE_HUMAN,
+                "--real requested but no judge provider key is available; refusing to "
+                "substitute always-pass mock judges (set ANTHROPIC/OPENAI/NVIDIA key, or drop --real)",
+                "rehearsal"))
 
         if self.full_panel:
             # Mirror the full declared roster (Anthropic + OpenAI + the whole
@@ -236,6 +276,9 @@ class Harness:
             accumulated["facts"] = payload["facts"]
         if "text" in payload:
             accumulated["draft"] = payload["text"]
+            # the channel form (citation tokens stripped) is what Rehearsal
+            # reviews and Gate 3 posts -- byte-identical across both.
+            accumulated["channel"] = to_channel(payload["text"])
         if "stated_total" in payload:
             accumulated["price"] = payload
 
@@ -263,12 +306,17 @@ class Harness:
             t0 = time.time()
             payload = worker.run(task, feedback)
             secs = round(time.time() - t0, 4)
+            if not isinstance(payload, dict):
+                raise HarnessHalt(Alarm(
+                    AlarmType.ESCALATE_HUMAN,
+                    f"worker '{worker.name}' returned a {type(payload).__name__}, not a dict", name))
+            tokens = int(payload.get("_tokens", 0) or 0)
+            # Internal telemetry (_tokens/_seconds/_parse_error) belongs in meta,
+            # not in the stored/posted payload.
+            clean = {k: v for k, v in payload.items() if not k.startswith("_")}
             env = Envelope(
-                run_id,
-                name,
-                payload,
-                {"attempt": attempt, "seconds": secs,
-                 "tokens": int(payload.get("_tokens", 0) or 0), "worker": worker.name},
+                run_id, name, clean,
+                {"attempt": attempt, "seconds": secs, "tokens": tokens, "worker": worker.name},
             )
 
             ctx = self._ctx_for(stage, accumulated)
@@ -284,8 +332,8 @@ class Harness:
             if not failed:
                 self.store.save_output(env)
                 self.store.log(run_id, name, "stage", "pass", ok=True,
-                               detail={"attempt": attempt, "seconds": secs, "tokens": env.meta["tokens"]})
-                self._absorb(payload, accumulated)
+                               detail={"attempt": attempt, "seconds": secs, "tokens": tokens})
+                self._absorb(env.payload, accumulated)
                 return env
 
             # --- content failed: raise a structured alarm per failed check ---
@@ -323,7 +371,7 @@ class Harness:
         held_revisions = 0
 
         while True:
-            text = accumulated.get("draft", "")
+            text = accumulated.get("channel", accumulated.get("draft", ""))
             try:
                 result = rehearsal.run(run_id, text, judges)
             except RehearsalEscalation as e:
@@ -358,7 +406,7 @@ class Harness:
     # -- Gate 3: Action, behind the human hold (dry-run by default) ----------
     def run_action_stage(self, stage: dict, run_id: str, accumulated: dict) -> dict:
         name = stage["name"]
-        text = accumulated.get("draft", "")
+        text = accumulated.get("channel", accumulated.get("draft", ""))
         self.store.log(run_id, name, "stage", "start",
                        detail={"rendered": render_post({"text": text}, author=self.handle)})
         gate = ActionGate(self.store, self.guardrails, approver=self.approver, handle=self.handle)
@@ -366,6 +414,10 @@ class Harness:
             record = gate.run(run_id, text)
         except HumanDeclined as e:
             raise HarnessHalt(e.alarm)
+        except Exception as e:  # e.g. a real X API failure -> structured + fail closed
+            esc = Alarm(AlarmType.ESCALATE_HUMAN, f"posting failed: {e}", name)
+            self.store.log(run_id, name, "alarm", esc.type.value, ok=False, detail=esc.as_dict())
+            raise HarnessHalt(esc)
         self.store.log(run_id, name, "stage", "pass", ok=True,
                        detail={"post_id": record["post_id"], "mode": record["mode"]})
         return record
@@ -390,12 +442,20 @@ class Harness:
                                "replay_from": replay_from})
 
         accumulated: dict = {}
-        # Preload outputs of skipped (already-completed) stages from the store.
+        # Preload outputs of skipped (already-completed) stages from the store,
+        # but only ones that actually RECORDED a pass -- replay reuses verified
+        # rows, not merely present ones (fail closed on a tampered/partial store).
+        if start:
+            passed = {e["stage"] for e in self.store.events(run_id)
+                      if e["kind"] == "stage" and e["name"] == "pass"}
         for s in stages[:start]:
             out = self.store.load_output(run_id, s["name"])
             if out is None:
                 raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
                                         f"cannot replay: no stored output for '{s['name']}'", "replay"))
+            if s["name"] not in passed:
+                raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
+                                        f"cannot replay: stage '{s['name']}' has no recorded pass", "replay"))
             self._absorb(out, accumulated)
             self.store.log(run_id, s["name"], "replay", "loaded-from-store", ok=True,
                            detail={"note": "skipped; reused persisted output"})
@@ -617,8 +677,15 @@ def _cli_approver(run_id: str, rendered: dict) -> bool:
 
 def auto_approver(run_id: str, rendered: dict) -> bool:
     """Non-interactive auto-approval for tests and `--yes`. The approval is still
-    recorded in the store, satisfying the human-hold rule."""
+    recorded in the store, satisfying the human-hold rule. Because it is NOT
+    interactive, it can never trigger a real post (Gate 3 downgrades to dry-run)."""
     return True
+
+
+# Mark interactivity so Gate 3 can refuse a LIVE post unless a real human is at
+# the prompt. (A live post needs DRY_RUN=0 + creds + an *interactive* approval.)
+_cli_approver.interactive = True   # type: ignore[attr-defined]
+auto_approver.interactive = False  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -668,19 +735,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             console.print(f"  [dim]{res['hint']}[/]")
         return 1
 
-    store = Store(args.db)
-    approver = auto_approver if args.yes else _cli_approver
-    h = Harness(args.mission, store, real=args.real,
-                faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
-                block_demo=args.block_demo, full_panel=args.full_panel, approver=approver)
-
     if args.replay_from and not args.run:
         console.print("[red]--replay-from requires --run <id>[/]")
         return 2
 
+    store = Store(args.db)
+    approver = auto_approver if args.yes else _cli_approver
     code = 0
     run_id = args.run
+    h = None
     try:
+        h = Harness(args.mission, store, real=args.real,
+                    faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
+                    block_demo=args.block_demo, full_panel=args.full_panel, approver=approver)
         run_id = h.run(run_id=args.run, replay_from=args.replay_from)
     except HarnessHalt as halt:
         run_id = run_id or getattr(h, "last_run_id", None)

@@ -55,6 +55,7 @@ def test_build_real_worker_picks_present_provider(monkeypatch):
 def test_one_nvidia_key_activates_the_nim_bunch(monkeypatch):
     _clear_keys(monkeypatch)
     monkeypatch.setenv("NVIDIA_API_KEY", "fake")
+    monkeypatch.setenv("MAX_JUDGES", "99")  # lift the default cost cap to see the full bunch
     judges = build_real_judges()
     assert len(judges) >= 8, "a single NVIDIA key should light up the whole NIM bunch"
     assert all(j.cfg.provider == "nvidia" for j in judges)

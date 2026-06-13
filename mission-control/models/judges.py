@@ -109,12 +109,16 @@ def build_real_judges(faulty_grader: bool = False) -> list:
 
     judges = [RealJudge(cfg) for cfg in roster if os.environ.get(cfg.env_key)]
 
+    # Cap panel size to bound real-model cost (admission probes EVERY judge 5x).
+    # Defaults to 6; set MAX_JUDGES to raise/lower it.
+    limit = 6
     cap = os.environ.get("MAX_JUDGES")
     if cap:
         try:
-            judges = judges[: max(1, int(cap))]
+            limit = max(1, int(cap))
         except ValueError:
-            pass
+            limit = 6
+    judges = judges[:limit]
 
     if faulty_grader and judges:
         # For `--real --faulty-grader` swap in the deterministic faulty judge so

@@ -69,7 +69,7 @@ def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str
     if provider == "anthropic":
         import anthropic
 
-        client = anthropic.Anthropic(api_key=os.environ[env_key])
+        client = anthropic.Anthropic(api_key=os.environ[env_key], timeout=60.0)
         resp = client.messages.create(
             model=model, max_tokens=1024, system=system,
             messages=[{"role": "user", "content": user}],
@@ -84,10 +84,10 @@ def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str
     if provider == "ollama":
         # env_key holds the host URL (e.g. http://localhost:11434/v1); the key
         # itself is a placeholder Ollama ignores.
-        client = OpenAI(api_key="ollama",
+        client = OpenAI(api_key="ollama", timeout=60.0,
                         base_url=os.environ.get(env_key) or "http://localhost:11434/v1")
     else:
-        client = OpenAI(api_key=os.environ[env_key], base_url=base_url)
+        client = OpenAI(api_key=os.environ[env_key], base_url=base_url, timeout=60.0)
     resp = client.chat.completions.create(
         model=model, max_tokens=1024,
         messages=[{"role": "system", "content": system},

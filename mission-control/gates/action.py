@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
@@ -33,6 +34,18 @@ TWEET_LIMIT = 280
 def build_x_payload(text: str) -> dict:
     """The exact body that POST /2/tweets would receive. Deterministic."""
     return {"text": text}
+
+
+_CITATION_TOKEN = re.compile(r"\s*\[[A-Za-z0-9_]+\]")
+
+
+def to_channel(text: str) -> str:
+    """Strip inline [fN] provenance tokens to produce the text that is actually
+    posted. `grounding` runs on the *un-stripped* draft (it needs the tokens),
+    while Rehearsal and Action both build their payload from THIS string -- so the
+    byte-identical guarantee holds on the channel form, and the live tweet does
+    not contain '[f1]' noise."""
+    return _CITATION_TOKEN.sub("", text).strip()
 
 
 def render_post(payload: dict, *, author: str = "@yourbrand") -> dict:
@@ -120,7 +133,11 @@ class RealXClient(XClient):
 
         resp = requests.post("https://api.twitter.com/2/tweets", json=payload,
                              auth=self._auth(), timeout=15.0)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            # Structured, actionable error instead of a bare HTTPError stack trace.
+            raise RuntimeError(
+                f"X API returned {resp.status_code}: {resp.text[:300]} "
+                "(403/401 usually means the token lacks write scope — see --verify-x)")
         data = resp.json().get("data", {})
         post_id = data.get("id", "unknown")
         record = {"post_id": post_id, "mode": self.mode, "payload": payload,
@@ -182,13 +199,24 @@ def verify_x_credentials() -> dict:
                      "Access Token & Secret.")}
 
 
-def select_client(store, handle: str = "@yourbrand") -> XClient:
-    """DRY_RUN unless EVERY safety condition for a real post is met."""
-    dry_run = os.environ.get("DRY_RUN", "1").strip().lower() not in ("0", "false", "no")
-    creds = _x_credentials()
-    if dry_run or creds is None:
+def _dry_run_env() -> bool:
+    return os.environ.get("DRY_RUN", "1").strip().lower() not in ("0", "false", "no")
+
+
+def would_post_live() -> bool:
+    """True only if the environment is configured for a REAL post (DRY_RUN off and
+    all X creds present). The human-hold is the third, separate condition."""
+    return (not _dry_run_env()) and _x_credentials() is not None
+
+
+def select_client(store, handle: str = "@yourbrand", interactive: bool = True) -> XClient:
+    """DRY_RUN unless EVERY safety condition for a real post is met -- including
+    an INTERACTIVE human approver. A non-interactive approver (`--yes`, tests, the
+    dashboard auto-path) can NEVER trigger a live post, even with DRY_RUN=0 and
+    creds present. This closes the `--real --yes` foot-gun."""
+    if not would_post_live() or not interactive:
         return DryRunXClient(store, handle)
-    return RealXClient(store, creds, handle)
+    return RealXClient(store, creds=_x_credentials(), handle=handle)
 
 
 # ---------------------------------------------------------------------------
@@ -211,13 +239,26 @@ class ActionGate:
         self.guardrails = guardrails
         self.approver = approver
         self.handle = handle
-        self.client = select_client(store, handle)
+        # An approver is "interactive" (a real human at a prompt) only if it says
+        # so. Unknown/auto approvers are treated as non-interactive -> dry-run.
+        self.interactive = bool(getattr(approver, "interactive", False))
+        self.client = select_client(store, handle, interactive=self.interactive)
 
     def run(self, run_id: str, text: str) -> dict:
         """Build the byte-identical payload, enforce the human hold, then post
         (dry-run by default). Returns the post record."""
         payload = build_x_payload(text)
         rendered = render_post(payload, author=self.handle)
+
+        # If the environment was configured for a live post but the approver is
+        # non-interactive, we have safely downgraded to dry-run -- record why, so
+        # it is visible and never a silent surprise.
+        if would_post_live() and not self.interactive:
+            note = Alarm(AlarmType.AWAITING_HUMAN,
+                         "live post was configured (DRY_RUN=0 + creds) but approval is "
+                         "non-interactive; downgraded to DRY_RUN. Use the interactive CLI to post for real.",
+                         "action")
+            self.store.log(run_id, "action", "alarm", note.type.value, ok=None, detail=note.as_dict())
 
         # --- the human hold ---
         if self.guardrails.human_hold_required:

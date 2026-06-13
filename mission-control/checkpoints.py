@@ -236,9 +236,13 @@ def meta_check(env, ctx) -> CheckResult:
         # (c) a failing criterion must give a reason
         if not str(reasons.get(k, "")).strip():
             problems.append(f"failing criterion '{k}' lacks a reason")
-        # (d) if it cites a span, that span must appear verbatim in the text
+        # (d) it MUST quote a verbatim span from the text. A fail with no citation
+        # cannot be verified, so a missing/empty citation is itself a fault --
+        # otherwise a hallucinating judge could bypass the audit by omission.
         cite = citations.get(k)
-        if cite is not None and str(cite).strip() and str(cite) not in text:
+        if not (cite is not None and str(cite).strip()):
+            problems.append(f"failing criterion '{k}' provides no citation to verify")
+        elif str(cite) not in text:
             problems.append(
                 f"failing criterion '{k}' cites a span not present in the reviewed text: {cite!r}"
             )
@@ -273,6 +277,6 @@ CONTENT_CHECK_ALARM = {
     "schema": "SCHEMA_INVALID",
     "grounding": "UNGROUNDED_CLAIM",
     "banned_claims": "BANNED_CLAIM",
-    "arithmetic": "MARGIN_BREACH",
+    "arithmetic": "CONTENT_REJECTED",  # an arithmetic mismatch is not a margin breach
     "margin": "MARGIN_BREACH",
 }

@@ -72,13 +72,22 @@ class Store:
         self.path = path
         self._lock = threading.Lock()
         # check_same_thread=False so the FastAPI dashboard can read concurrently;
-        # all writes are serialised through self._lock.
-        self._conn = sqlite3.connect(path, check_same_thread=False)
+        # the RLock below serialises *all* access (reads and writes) on this
+        # connection, and WAL + busy_timeout handle the engine and dashboard
+        # holding separate connections to the same file.
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(path, check_same_thread=False, timeout=10.0)
         self._conn.row_factory = sqlite3.Row
         self._init()
 
     def _init(self) -> None:
         with self._lock:
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA busy_timeout=10000")
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+            except sqlite3.Error:
+                pass  # e.g. :memory: doesn't support WAL -- fall back silently
             self._conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS events (
@@ -140,12 +149,14 @@ class Store:
             )
             self._conn.commit()
 
-    # -- reads (timeline + replay are built on these) ------------------------
+    # -- reads (timeline + replay are built on these). Locked too, because the
+    #    one shared connection cannot interleave a read cursor with a write. ----
     def load_output(self, run_id: str, stage: str) -> Optional[dict]:
-        row = self._conn.execute(
-            "SELECT payload FROM outputs WHERE run_id=? AND stage=?",
-            (run_id, stage),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT payload FROM outputs WHERE run_id=? AND stage=?",
+                (run_id, stage),
+            ).fetchone()
         return json.loads(row["payload"]) if row else None
 
     def load_envelope(self, run_id: str, stage: str) -> Optional[Envelope]:
@@ -158,11 +169,12 @@ class Store:
         return self.load_output(run_id, stage) is not None
 
     def events(self, run_id: str) -> list[dict]:
-        rows = self._conn.execute(
-            "SELECT id, ts, stage, kind, name, ok, detail FROM events "
-            "WHERE run_id=? ORDER BY id",
-            (run_id,),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, ts, stage, kind, name, ok, detail FROM events "
+                "WHERE run_id=? ORDER BY id",
+                (run_id,),
+            ).fetchall()
         out = []
         for r in rows:
             out.append(
@@ -179,15 +191,17 @@ class Store:
         return out
 
     def stages_with_output(self, run_id: str) -> list[str]:
-        rows = self._conn.execute(
-            "SELECT stage FROM outputs WHERE run_id=? ORDER BY ts", (run_id,)
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT stage FROM outputs WHERE run_id=? ORDER BY ts", (run_id,)
+            ).fetchall()
         return [r["stage"] for r in rows]
 
     def runs(self) -> list[str]:
-        rows = self._conn.execute(
-            "SELECT run_id, MAX(ts) AS last FROM events GROUP BY run_id ORDER BY last DESC"
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT run_id, MAX(ts) AS last FROM events GROUP BY run_id ORDER BY last DESC"
+            ).fetchall()
         return [r["run_id"] for r in rows]
 
     def close(self) -> None:
