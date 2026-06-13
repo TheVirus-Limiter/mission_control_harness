@@ -21,10 +21,16 @@ services:
       # when you use the LIVE toggle; this just means "never post live unless asked".
       - key: DRY_RUN
         value: "1"
-      # Real review-panel size. 6 = the diverse six (good + affordable). Every judge
-      # is a paid call per real run, so keep this modest for a live demo.
+      # Real review-panel size. 4 keeps the panel diverse but snappy (every judge is
+      # a paid call and the slowest one bounds the wall-time). Raise for a bigger panel.
       - key: MAX_JUDGES
-        value: "6"
+        value: "4"
+      # Per-judge call timeout / retries -- low so one slow model can't drag the
+      # review panel to a crawl. Raise for more patience.
+      - key: LLM_TIMEOUT
+        value: "35"
+      - key: LLM_RETRIES
+        value: "2"
       # The dashboard reads/writes this SQLite file (ephemeral on free plans).
       - key: MISSION_DB
         value: "mission.db"

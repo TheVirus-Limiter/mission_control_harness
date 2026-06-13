@@ -66,6 +66,23 @@ def parse_json_loose(raw: str) -> dict:
 # ---------------------------------------------------------------------------
 # Transport
 # ---------------------------------------------------------------------------
+# Per-call timeout and retry count are tunable so a slow model can't drag the whole
+# review panel to a crawl. Defaults are demo-friendly (fail fast); raise LLM_TIMEOUT
+# / LLM_RETRIES for more patience.
+def _llm_timeout() -> float:
+    try:
+        return float(os.environ.get("LLM_TIMEOUT", "35"))
+    except ValueError:
+        return 35.0
+
+
+def _llm_retries() -> int:
+    try:
+        return max(1, int(os.environ.get("LLM_RETRIES", "2")))
+    except ValueError:
+        return 2
+
+
 def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str,
                 system: str, user: str) -> tuple[str, int]:
     """Return (raw_text, tokens), with a small retry/backoff so a transient rate
@@ -74,7 +91,8 @@ def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str
     import time as _time
 
     last = None
-    for attempt in range(3):
+    retries = _llm_retries()
+    for attempt in range(retries):
         try:
             return _call_once(provider, model, base_url, env_key, system, user)
         except Exception as e:  # noqa: BLE001 -- transient transport errors
@@ -82,9 +100,9 @@ def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str
             msg = str(e).lower()
             transient = any(k in msg for k in ("429", "rate", "timeout", "timed out",
                                                "overload", "503", "502", "connection"))
-            if attempt == 2 or not transient:
+            if attempt == retries - 1 or not transient:
                 raise
-            _time.sleep(1.5 * (attempt + 1))
+            _time.sleep(1.2 * (attempt + 1))
     raise last  # pragma: no cover
 
 
@@ -93,7 +111,7 @@ def _call_once(provider: str, model: str, base_url: Optional[str], env_key: str,
     if provider == "anthropic":
         import anthropic
 
-        client = anthropic.Anthropic(api_key=os.environ[env_key], timeout=60.0)
+        client = anthropic.Anthropic(api_key=os.environ[env_key], timeout=_llm_timeout())
         resp = client.messages.create(
             model=model, max_tokens=1024, system=system,
             messages=[{"role": "user", "content": user}],
@@ -108,10 +126,10 @@ def _call_once(provider: str, model: str, base_url: Optional[str], env_key: str,
     if provider == "ollama":
         # env_key holds the host URL (e.g. http://localhost:11434/v1); the key
         # itself is a placeholder Ollama ignores.
-        client = OpenAI(api_key="ollama", timeout=60.0,
+        client = OpenAI(api_key="ollama", timeout=_llm_timeout(),
                         base_url=os.environ.get(env_key) or "http://localhost:11434/v1")
     else:
-        client = OpenAI(api_key=os.environ[env_key], base_url=base_url, timeout=60.0)
+        client = OpenAI(api_key=os.environ[env_key], base_url=base_url, timeout=_llm_timeout())
     resp = client.chat.completions.create(
         model=model, max_tokens=1024,
         messages=[{"role": "system", "content": system},
