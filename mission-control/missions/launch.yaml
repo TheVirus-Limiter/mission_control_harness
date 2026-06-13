@@ -14,6 +14,7 @@ input:
   topic: "FocusApp launch"
   brand: "FocusApp — a calm, evidence-based productivity app. Voice: friendly, precise, never hypey."
   audience: "Knowledge workers who struggle to focus during deep work."
+  handle: "@focusapp"
 
 # Retry budgets the engine spends before it fails closed and escalates.
 budgets:

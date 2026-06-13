@@ -35,7 +35,7 @@ def build_x_payload(text: str) -> dict:
     return {"text": text}
 
 
-def render_post(payload: dict, *, author: str = "@focusapp") -> dict:
+def render_post(payload: dict, *, author: str = "@yourbrand") -> dict:
     """How the post would appear, for the simulated UI. Derived from the payload,
     never from anything the real network returns."""
     text = payload.get("text", "")
@@ -66,8 +66,9 @@ class DryRunXClient(XClient):
     """Default. Records exactly what WOULD be posted; never touches the network.
     Returns a fake id and marks the record for the simulated UI."""
 
-    def __init__(self, store):
+    def __init__(self, store, handle: str = "@yourbrand"):
         self.store = store
+        self.handle = handle
 
     @property
     def mode(self) -> str:
@@ -76,7 +77,7 @@ class DryRunXClient(XClient):
     def post(self, run_id: str, payload: dict) -> dict:
         post_id = "dryrun-" + uuid.uuid4().hex[:10]
         record = {"post_id": post_id, "mode": self.mode, "payload": payload,
-                  "rendered": render_post(payload), "live": False}
+                  "rendered": render_post(payload, author=self.handle), "live": False}
         self.store.log(run_id, "action", "post", post_id, ok=True, detail=record)
         return record
 
@@ -90,9 +91,10 @@ class RealXClient(XClient):
     """Real X API v2 client. Only ever constructed when DRY_RUN is off AND the
     credentials are present. Uses OAuth 1.0a user context for POST /2/tweets."""
 
-    def __init__(self, store, creds: dict):
+    def __init__(self, store, creds: dict, handle: str = "@yourbrand"):
         self.store = store
         self.creds = creds
+        self.handle = handle
 
     @property
     def mode(self) -> str:
@@ -122,7 +124,8 @@ class RealXClient(XClient):
         data = resp.json().get("data", {})
         post_id = data.get("id", "unknown")
         record = {"post_id": post_id, "mode": self.mode, "payload": payload,
-                  "rendered": render_post(payload), "live": True, "api_response": data}
+                  "rendered": render_post(payload, author=self.handle), "live": True,
+                  "api_response": data}
         self.store.log(run_id, "action", "post", post_id, ok=True, detail=record)
         return record
 
@@ -179,13 +182,13 @@ def verify_x_credentials() -> dict:
                      "Access Token & Secret.")}
 
 
-def select_client(store) -> XClient:
+def select_client(store, handle: str = "@yourbrand") -> XClient:
     """DRY_RUN unless EVERY safety condition for a real post is met."""
     dry_run = os.environ.get("DRY_RUN", "1").strip().lower() not in ("0", "false", "no")
     creds = _x_credentials()
     if dry_run or creds is None:
-        return DryRunXClient(store)
-    return RealXClient(store, creds)
+        return DryRunXClient(store, handle)
+    return RealXClient(store, creds, handle)
 
 
 # ---------------------------------------------------------------------------
@@ -203,17 +206,18 @@ class HumanDeclined(Exception):
 
 
 class ActionGate:
-    def __init__(self, store, guardrails, approver: Approver):
+    def __init__(self, store, guardrails, approver: Approver, handle: str = "@yourbrand"):
         self.store = store
         self.guardrails = guardrails
         self.approver = approver
-        self.client = select_client(store)
+        self.handle = handle
+        self.client = select_client(store, handle)
 
     def run(self, run_id: str, text: str) -> dict:
         """Build the byte-identical payload, enforce the human hold, then post
         (dry-run by default). Returns the post record."""
         payload = build_x_payload(text)
-        rendered = render_post(payload)
+        rendered = render_post(payload, author=self.handle)
 
         # --- the human hold ---
         if self.guardrails.human_hold_required:

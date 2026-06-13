@@ -60,11 +60,13 @@ def network_disabled():
 
 
 class Rehearsal:
-    def __init__(self, store, guardrails, rubric: list[str], reviewer_retries: int = 2):
+    def __init__(self, store, guardrails, rubric: list[str], reviewer_retries: int = 2,
+                 handle: str = "@yourbrand"):
         self.store = store
         self.guardrails = guardrails
         self.rubric = list(rubric)
         self.reviewer_retries = int(reviewer_retries)
+        self.handle = handle
 
     # -- per-judge review with meta_check audit + retry ----------------------
     def _review(self, judge, text: str, run_id: str) -> dict:
@@ -110,7 +112,7 @@ class Rehearsal:
         # 1) digital twin: byte-identical payload, built with egress disabled.
         with network_disabled():
             payload = build_x_payload(text)
-            rendered = render_post(payload)
+            rendered = render_post(payload, author=self.handle)
         self.store.log(run_id, "rehearsal", "gate", "digital-twin", ok=True,
                        detail={"payload": payload, "rendered": rendered,
                                "egress": "disabled", "byte_len": len(text)})

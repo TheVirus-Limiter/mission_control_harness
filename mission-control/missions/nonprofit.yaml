@@ -12,6 +12,7 @@ input:
   topic: "Harbor Animal Shelter Giving Tuesday campaign"
   brand: "Harbor Animal Shelter — warm, honest, community-first. Voice: heartfelt, specific, never guilt-tripping."
   audience: "Local supporters and lapsed donors who love animals."
+  handle: "@harborshelter"
 
 budgets:
   writer_revisions: 3

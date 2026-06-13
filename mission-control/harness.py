@@ -107,6 +107,7 @@ class Harness:
         self.full_panel = full_panel
         self.budgets = self.mission.get("budgets", {})
         self.input = self.mission.get("input", {})
+        self.handle = self.input.get("handle", "@yourbrand")
         self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
         self.rubric = self.mission.get("rubric_criteria", [])
         admission_cfg = self.mission.get("admission", {}) or {}
@@ -316,7 +317,8 @@ class Harness:
             self.ensure_certified(judge, run_id)
 
         rehearsal = Rehearsal(self.store, self.guardrails, self.rubric,
-                              reviewer_retries=int(self.budgets.get("reviewer_retries", 2)))
+                              reviewer_retries=int(self.budgets.get("reviewer_retries", 2)),
+                              handle=self.handle)
         budget = int(self.budgets.get("writer_revisions", 1))
         held_revisions = 0
 
@@ -358,8 +360,8 @@ class Harness:
         name = stage["name"]
         text = accumulated.get("draft", "")
         self.store.log(run_id, name, "stage", "start",
-                       detail={"rendered": render_post({"text": text})})
-        gate = ActionGate(self.store, self.guardrails, approver=self.approver)
+                       detail={"rendered": render_post({"text": text}, author=self.handle)})
+        gate = ActionGate(self.store, self.guardrails, approver=self.approver, handle=self.handle)
         try:
             record = gate.run(run_id, text)
         except HumanDeclined as e:
