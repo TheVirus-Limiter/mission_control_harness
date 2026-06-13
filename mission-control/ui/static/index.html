@@ -267,6 +267,80 @@ button{font-family:inherit;cursor:pointer}
 .diffbox del{background:rgba(255,84,102,.2);color:#ffb6bd;text-decoration:line-through}
 .diffbox ins{background:rgba(53,255,158,.18);color:#bfffe0;text-decoration:none}
 
+/* ===== REHEARSAL — X (Twitter) client (its own palette) ===== */
+.xharness{flex:none;display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:11px;color:var(--faint)}
+.xharness b{color:var(--held)}
+.xharness .tally{margin-left:auto;display:flex;gap:8px;align-items:center}
+.xchip{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px}
+.xchip.pass{color:var(--go);background:rgba(53,255,158,.14)}
+.xchip.hold{color:var(--no);background:rgba(255,84,102,.16)}
+.xverdict{font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 11px;border-radius:7px}
+.xverdict.go{color:var(--go);background:rgba(53,255,158,.14);border:1px solid rgba(53,255,158,.4)}
+.xverdict.held{color:var(--held);background:rgba(255,180,84,.14);border:1px solid rgba(255,180,84,.4)}
+.xverdict.esc{color:var(--no);background:rgba(255,84,102,.14);border:1px solid rgba(255,84,102,.4)}
+.xapp{flex:1;display:flex;justify-content:center;background:var(--x-bg);min-height:0;color:var(--x-text);font-family:var(--sans)}
+.xnav{width:218px;flex:none;border-right:1px solid var(--x-border);padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.xlogo{font-size:26px;font-weight:700;color:var(--x-text);padding:8px 12px}
+.xnavi{display:flex;align-items:center;gap:16px;padding:11px 14px;border-radius:999px;font-size:19px;color:var(--x-text);cursor:pointer}
+.xnavi:hover{background:rgba(231,233,234,.1)}
+.xnavi .ic{width:24px;text-align:center;font-size:20px;color:var(--x-text)}
+.xnavi.on{font-weight:700}
+.xnavi .lo{font-size:10px;color:var(--x-blue);margin-left:-8px}
+.xpost-btn{margin:10px 6px;background:var(--x-text);color:#000;border:none;border-radius:999px;padding:13px;font-weight:700;font-size:15px}
+.xacct{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border-radius:999px}
+.xacct:hover{background:rgba(231,233,234,.1)}
+.xav{width:38px;height:38px;border-radius:50%;background:var(--x-av);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex:none}
+.xacct .nm{font-weight:700;font-size:14px}.xacct .hd{color:var(--x-muted);font-size:13px}
+.xcenter{flex:1;max-width:600px;border-right:1px solid var(--x-border);overflow:auto;min-width:0}
+.xcenter::-webkit-scrollbar{width:8px}.xcenter::-webkit-scrollbar-thumb{background:#333}
+.xtabs{position:sticky;top:0;display:flex;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);border-bottom:1px solid var(--x-border);z-index:2}
+.xtab{flex:1;text-align:center;padding:15px;font-size:15px;color:var(--x-muted);position:relative}
+.xtab.on{color:var(--x-text);font-weight:700}
+.xtab.on::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:56px;height:4px;border-radius:2px;background:var(--x-blue)}
+.xcompose{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--x-border);color:var(--x-muted)}
+.xcompose .ph{flex:1;font-size:19px;padding-top:8px}
+.xtweet{padding:12px 16px;border-bottom:1px solid var(--x-border);display:flex;gap:12px}
+.xtweet .col{flex:1;min-width:0}
+.xrowhead{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:15px}
+.xrowhead .nm{font-weight:700}
+.xcheck{width:18px;height:18px;border-radius:50%;background:var(--x-blue);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px}
+.xrowhead .hd{color:var(--x-muted)}
+.xtier{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;padding:1px 6px;border-radius:5px}
+.xtier.deep{color:var(--tier-deep);background:rgba(155,108,255,.2)}
+.xtier.standard{color:var(--tier-standard);background:rgba(57,197,255,.18)}
+.xtier.lexical{color:var(--tier-lexical);background:rgba(255,180,84,.18)}
+.xsimbadge{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--held);border:1px solid rgba(255,180,84,.5);border-radius:5px;padding:1px 6px;margin-left:auto}
+.xbody{font-size:19px;line-height:1.4;margin:4px 0 10px;white-space:pre-wrap}
+.xbody.big{font-size:21px}
+.xbody mark.lie{background:rgba(255,84,102,.32);border-radius:3px;padding:0 3px;color:#fff}
+.xverdpill{font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-left:auto}
+.xverdpill.pass{color:var(--go);background:rgba(53,255,158,.14)}
+.xverdpill.hold{color:var(--no);background:rgba(255,84,102,.16)}
+.xacts{display:flex;gap:42px;color:var(--x-muted);font-size:15px;margin-top:2px}
+.xacts span{cursor:pointer}
+.xcrit{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.xcc{font-family:var(--mono);font-size:10px;color:var(--x-muted);border:1px solid var(--x-border);border-radius:5px;padding:1px 7px}
+.xcc.held{color:var(--no);border-color:rgba(255,84,102,.5)}
+.xreplab{padding:10px 16px;color:var(--x-muted);font-size:13px;border-bottom:1px solid var(--x-border)}
+.xreply{padding:12px 16px;border-bottom:1px solid var(--x-border);display:flex;gap:12px;animation:fadein .35s both;border-left:3px solid transparent}
+.xreply.scan-pass{border-left-color:var(--go);background:rgba(53,255,158,.04)}
+.xreply.scan-hold{border-left-color:var(--no);background:rgba(255,84,102,.05)}
+.xtyping{padding:12px 16px;border-bottom:1px solid var(--x-border);display:flex;gap:12px;align-items:center;color:var(--x-muted);font-size:13px}
+.xtyping i{width:6px;height:6px;border-radius:50%;background:var(--x-muted);display:inline-block;animation:pulse 1s infinite}
+.xtyping i:nth-child(2){animation-delay:.2s}.xtyping i:nth-child(3){animation-delay:.4s}
+.xrail{width:312px;flex:none;padding:10px 16px;display:flex;flex-direction:column;gap:14px}
+.xsearch{background:#202327;border-radius:999px;padding:11px 16px;color:var(--x-muted);font-size:14px}
+.xcard{background:#16181c;border-radius:16px;padding:14px}
+.xcard h3{margin:0 0 6px;font-size:19px;font-weight:800}
+.xcard p{margin:0 0 10px;font-size:13px;color:var(--x-muted)}
+.xcard .sub{color:var(--x-text)}
+.xsub-btn{background:var(--x-blue);color:#fff;border:none;border-radius:999px;padding:9px 16px;font-weight:700;font-size:14px}
+.xtrend{padding:7px 0}
+.xtrend .k{font-size:12px;color:var(--x-muted)}.xtrend .v{font-weight:700;font-size:14px}
+.xconsent{padding:10px 16px;font-family:var(--mono);font-size:12px;font-weight:700;border-bottom:1px solid var(--x-border)}
+.xconsent.go{color:var(--go)}.xconsent.held{color:var(--held)}.xconsent.esc{color:var(--no)}
+.xheld-stamp{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);font-family:var(--arc);font-size:34px;color:var(--no);border:5px solid var(--no);border-radius:12px;padding:10px 22px;z-index:5;animation:slam .5s;pointer-events:none;text-shadow:0 0 18px rgba(255,84,102,.6)}
+
 /* ---- keyframes ---- */
 @keyframes blink{50%{opacity:0}}
 @keyframes pulse{50%{opacity:.32}}
@@ -750,32 +824,104 @@ function writeContent(auto){
   if(auto)startAuto(3,()=>setPhase('rehearsal'),'#wnext','▶ REHEARSAL');
 }
 
-/* ===== REHEARSAL (simple — upgraded in Step 6) ===== */
-function renderRehearsal(){$('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">REHEARSAL · the digital twin</h1><p class="sub">the review panel is reading the post…</p></div>`;}
-function playRehearsal(){
-  const p=view.panel||{};const judges=p.judges||[];
-  const post=view.post||{};
-  const eligible=p.eligible;
-  const reps=judges.map(j=>{const tier=TIER_OF(j.profile);
-    return `<div class="glass" style="margin:6px 0;border-color:${j.pass?'rgba(53,255,158,.25)':'rgba(255,84,102,.4)'}">
-      <div style="display:flex;align-items:center;gap:8px">${robot(vendorOfJudge(j.name),'idle',.6)}
-        <b>${esc(j.name)}</b><span class="tier ${tier}">${j.profile}</span>
-        <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${j.pass?'var(--go)':'var(--no)'}">${j.pass?'PASS':'HELD'}</span></div>
-      <div style="margin-top:4px;color:var(--dim);font-size:13px">${esc(j.comment||'')}</div></div>`;}).join('');
-  const banner=eligible?`<div class="glass" style="border-color:rgba(53,255,158,.4);color:var(--go)">✓ UNANIMOUS CONSENT · publish-eligible</div>`
-    :`<div class="glass" style="border-color:rgba(255,180,84,.4);color:var(--held)">❚❚ HELD · the panel flagged it — it never reaches X</div>`;
-  $('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">REHEARSAL · FAKE X SIM — egress disabled</h1>
-    <div class="glass" style="margin:12px 0"><b>${esc(post.author||'@lumorasleep')}</b><div style="font-size:18px;margin-top:6px">${esc(stripCites(post.text||''))}</div></div>
-    ${banner}<div style="margin-top:10px">${reps}</div>
-    ${eligible?'<button class="btn go arc" id="rnext" style="margin-top:14px">▶ FINAL APPROVAL</button>':''}</div>`;
-  if(eligible){startAuto(3,()=>setPhase('approval'),'#rnext','▶ FINAL APPROVAL');}
-  else{failAt='rehearsal';renderStepper();}
-}
+/* ===== REHEARSAL — a real X (Twitter) client ===== */
 function vendorOfJudge(name){const n=(name||'').toLowerCase();
   if(n.includes('gpt'))return 'openai';if(n.includes('qwen'))return 'qwen';if(n.includes('glm'))return 'zai';
   if(n.includes('mixtral')||n.includes('mistral'))return 'mistral';if(n.includes('phi'))return 'microsoft';
   if(n.includes('llama'))return 'meta';if(n.includes('claude')||n.includes('anthropic'))return 'anthropic';
   if(n.includes('nemotron')||n.includes('nvidia'))return 'nvidia';return 'openai';}
+function judgeHandle(name){return {openai:'@gptoss_eval',qwen:'@qwen3_review',zai:'@glm_judge',mistral:'@mixtral_panel',
+  microsoft:'@phi4_check',meta:'@llama_review',anthropic:'@haiku_review',nvidia:'@nemotron_eval'}[vendorOfJudge(name)]||'@reviewer';}
+function rehearsalState(){
+  const p=view.panel||{};const eligible=p.eligible;const spans=p.held_spans||[];
+  const heldByPanel=!eligible&&spans.length>0;
+  const escalated=!eligible&&!heldByPanel&&(view.halted||(view.alarms||[]).some(a=>['ESCALATE_HUMAN','REVIEWER_FAULT'].includes(a.type)));
+  return {eligible,spans,state:eligible?'go':(heldByPanel?'held':'esc')};
+}
+function xNav(){
+  const items=[['🏠','Home',true],['🔍','Explore'],['🔔','Notifications'],['✉️','Messages'],['🤖','Grok'],['⭐','Premium','Lift off'],['👤','Profile'],['⋯','More']];
+  return `<div class="xnav"><div class="xlogo">𝕏</div>
+    ${items.map(([ic,l,x])=>`<div class="xnavi ${x===true?'on':''}"><span class="ic">${ic}</span>${esc(l)}${typeof x==='string'?`<span class="lo">${esc(x)}</span>`:''}</div>`).join('')}
+    <button class="xpost-btn">Post</button>
+    <div class="xacct"><div class="xav">L</div><div style="flex:1"><div class="nm">Lumora Sleep</div><div class="hd">@lumorasleep</div></div><span style="color:var(--x-muted)">⋯</span></div></div>`;
+}
+function xRail(){
+  return `<div class="xrail"><div class="xsearch">🔍 Search</div>
+    <div class="xcard"><h3>Subscribe to Premium</h3><p>Subscribe to unlock new features and, if eligible, a share of ad revenue.</p><button class="xsub-btn">Subscribe</button></div>
+    <div class="xcard"><h3>What's happening</h3>
+      <div class="xtrend"><div class="k">Wellness · Trending</div><div class="v">Sleep tourism</div><div class="k">18.2K posts</div></div>
+      <div class="xtrend"><div class="k">Technology · Trending</div><div class="v">On-device sleep tracking</div><div class="k">7,914 posts</div></div>
+      <div class="xtrend"><div class="k">Trending in Health</div><div class="v">Circadian lighting</div><div class="k">4,102 posts</div></div></div></div>`;
+}
+function xReply(j,spans){
+  const tier=TIER_OF(j.profile);const v=vendorOfJudge(j.name);
+  const crit=(j.covers||j.criteria||[]);
+  const heldCrit=(spans.find(s=>s.judge===j.name)||{}).criterion;
+  const chips=crit.map(c=>`<span class="xcc ${(!j.pass&&c===heldCrit)?'held':''}">${esc(c)}</span>`).join('');
+  return `<div class="xreply" data-pass="${j.pass?1:0}"><div class="xav" style="background:${lin(v).body}">${esc(lin(v).mono)}</div>
+    <div class="col"><div class="xrowhead"><span class="nm">${esc(j.name)}</span><span class="xcheck">✓</span>
+      <span class="xtier ${tier}">${esc((j.profile||'deep').toUpperCase())}</span><span class="hd">${esc(judgeHandle(j.name))} · now</span>
+      <span class="xverdpill ${j.pass?'pass':'hold'}">${j.pass?'PASS':'HELD'}</span></div>
+      <div class="xcrit">${chips}</div>
+      <div class="xbody" style="font-size:15px">${esc(j.comment||'')}</div>
+      <div class="xacts"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span><span>🔖</span></div></div></div>`;
+}
+function renderRehearsal(){
+  if(rReady())return rehearsalContent(false);
+  $('#stage').innerHTML=`<div class="wwrap"><div class="xharness">FAKE X SIM · simulated twin · egress <b>DISABLED</b> · nothing is live</div>
+    <div class="wrap"><p class="sub">the review panel is reading the post…</p></div></div>`;
+}
+function playRehearsal(){rehearsalContent(true);}
+function rehearsalContent(auto){
+  const p=view.panel||{};const judges=p.judges||[];const post=view.post||{};
+  const rs=rehearsalState();
+  let body=esc(stripCites(post.text||''));
+  if(rs.state==='held')rs.spans.forEach(h=>{if(h.span){const s=esc(stripCites(h.span));if(body.includes(s))body=body.split(s).join(`<mark class="lie">${s}</mark>`);}});
+  const passN=judges.filter(j=>j.pass).length, holdN=judges.length-passN;
+  const consent=rs.state==='go'?`<div class="xconsent go">✓ UNANIMOUS CONSENT · publish-eligible</div>`
+    :rs.state==='held'?`<div class="xconsent held">❚❚ HELD · failing: ${esc((rs.spans[0]||{}).criterion||'a criterion')} — it never reaches X</div>`
+    :`<div class="xconsent esc">⚠ ESCALATED · the panel could not certify — failed closed</div>`;
+  const tally=`<span class="xchip pass" id="tPass">✓ 0</span><span class="xchip hold" id="tHold">✗ 0</span>
+    <span class="xverdict ${rs.state==='go'?'go':rs.state==='held'?'held':'esc'}">${rs.state==='go'?'PUBLISH-ELIGIBLE':rs.state==='held'?'HELD':'ESCALATED'}</span>
+    ${rs.state==='go'?'<button class="btn go arc" id="rnext" style="font-size:10px;padding:7px 12px">▶ FINAL APPROVAL</button>':''}`;
+  $('#stage').innerHTML=`<div class="wwrap">
+    <div class="xharness">FAKE X SIM · simulated twin · egress <b>DISABLED</b> · nothing is live<div class="tally">${tally}</div></div>
+    <div class="xapp">${xNav()}
+      <div class="xcenter" id="xcenter">
+        <div class="xtabs"><div class="xtab on">For you</div><div class="xtab">Following</div></div>
+        <div class="xcompose"><div class="xav">L</div><div class="ph">What's happening?</div></div>
+        <div class="xtweet" style="position:relative"><div class="xav">L</div><div class="col">
+          <div class="xrowhead"><span class="nm">Lumora</span><span class="xcheck">✓</span><span class="hd">@lumorasleep · now</span><span class="xsimbadge">FAKE X SIMULATION</span></div>
+          <div class="xbody big">${body}</div>
+          <div class="xacts"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span><span>🔖</span></div>
+          ${rs.state==='held'?'<div class="xheld-stamp">HELD</div>':''}</div></div>
+        ${consent}
+        <div class="xreplab">Replies from the <b>review panel</b> — the digital twin shows each judge's verdict as a reply</div>
+        <div id="xreplies">${judges.map(j=>xReply(j,rs.spans)).join('')}</div>
+      </div>
+      ${xRail()}</div></div>`;
+  const rn=$('#rnext');if(rn)rn.onclick=()=>setPhase('approval');
+  if(auto){
+    if(rs.state==='go'){scanReplies(judges,()=>startAuto(3,()=>setPhase('approval'),'#rnext','▶ FINAL APPROVAL'));}
+    else{scanReplies(judges,()=>{});failAt='rehearsal';renderStepper();}
+  }else{ // revisit: show final tally immediately
+    $('#tPass').textContent='✓ '+passN;$('#tHold').textContent='✗ '+holdN;
+    if(rs.state!=='go'){failAt='rehearsal';renderStepper();}
+  }
+}
+async function scanReplies(judges,done){
+  const center=$('#xcenter');const reps=$$('#xreplies .xreply');let pass=0,hold=0;
+  for(let i=0;i<reps.length;i++){
+    const el=reps[i];const ok=el.dataset.pass==='1';
+    el.classList.add(ok?'scan-pass':'scan-hold');
+    if(ok)pass++;else hold++;
+    const tp=$('#tPass'),th=$('#tHold');if(tp)tp.textContent='✓ '+pass;if(th)th.textContent='✗ '+hold;
+    if(center)center.scrollTop=Math.max(0,el.offsetTop-center.clientHeight*0.5);
+    await sleep(620);
+    if(phase!=='rehearsal')return; // bailed out
+  }
+  done&&done();
+}
 
 /* ===== APPROVAL (functional) ===== */
 function renderApproval(){$('#stage').innerHTML=`<div class="wrap" style="max-width:680px"><h1 style="font-size:24px;color:var(--ink-bright);font-family:var(--sans);font-weight:600">Final approval</h1><p class="sub">awaiting…</p></div>`;}
