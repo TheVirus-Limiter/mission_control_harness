@@ -558,6 +558,43 @@ def api_runs():
         st.close()
 
 
+def _attack_stats(st: Store) -> dict:
+    """Session-level Proving Ground scoreboard: a PURE READ across every run's
+    persisted `attack` and `certificate` events. Counts the adversarial probes
+    fired at agents, how many were survived, and how many agents were refused
+    admission outright."""
+    attacks = survived = breaches = refused = certified = 0
+    agents_refused: set = set()
+    for rid in st.runs():
+        for e in st.events(rid):
+            if e["kind"] == "attack":
+                attacks += 1
+                if (e["detail"] or {}).get("survived") or e["ok"]:
+                    survived += 1
+                else:
+                    breaches += 1
+            elif e["kind"] == "certificate":
+                if e["ok"]:
+                    certified += 1
+                else:
+                    refused += 1
+                    agents_refused.add((e["detail"] or {}).get("agent") or e["name"])
+    return {"attacks": attacks, "survived": survived, "breaches": breaches,
+            "agents_refused": refused, "agents_certified": certified,
+            "distinct_agents_refused": sorted(a for a in agents_refused if a),
+            "survival_rate": round(survived / attacks, 4) if attacks else None}
+
+
+@app.get("/api/attack-stats")
+def api_attack_stats():
+    """Session-wide attacks-survived headline (read-only)."""
+    st = store()
+    try:
+        return _attack_stats(st)
+    finally:
+        st.close()
+
+
 @app.get("/api/runs/{run_id}/report")
 def api_report(run_id: str):
     """The full governance audit trail for a run, as portable JSON."""

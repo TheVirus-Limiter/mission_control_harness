@@ -158,6 +158,12 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
 
 /* GAUNTLET */
 .gintro{font-size:13px;color:var(--dim);margin-bottom:14px;line-height:1.5}
+.scoreboard{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:16px 18px;margin-bottom:16px;position:relative}
+.scoreboard .sbi{flex:1;min-width:90px;text-align:center}
+.scoreboard .sbn{font-family:var(--disp);font-weight:800;font-size:30px;line-height:1}
+.scoreboard .sbn.go{color:var(--go)} .scoreboard .sbn.no{color:var(--no)} .scoreboard .sbn.cy{color:var(--cyan)}
+.scoreboard .sbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-top:5px}
+.scoreboard .sbnote{position:absolute;top:8px;right:14px;font-size:10px;color:var(--faint)}
 .gintro .rp{cursor:pointer;color:var(--cyan);font-family:var(--mono);font-size:11px;border:1px solid var(--hair);border-radius:8px;padding:4px 11px;margin-left:6px}
 .track{position:relative;margin-bottom:18px;border-radius:18px;overflow:hidden;border:1px solid var(--hair);
   background:linear-gradient(160deg,rgba(16,22,40,.7),rgba(8,12,22,.7))}
@@ -355,7 +361,7 @@ const API=(location.protocol==='http:'||location.protocol==='https:')?'':'http:/
 const $=s=>document.querySelector(s);
 const esc=s=>(s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let runId=null,cache=null,lastSig=null,active='mission',timer=null,tfilter='all',gKey=null,twKey=null,mSeq={};
+let runId=null,cache=null,lastSig=null,active='mission',timer=null,tfilter='all',gKey=null,twKey=null,mSeq={},sessionStats=null;
 const DISC=[['run','🏃'],['swim','🏊'],['cycle','🚴'],['climb','🧗'],['vault','🤸']];
 
 async function J(u,o){const r=await fetch(API+u,o);if(!r.ok&&r.status>=500)throw new Error(r.status);return r.json();}
@@ -391,8 +397,10 @@ async function loadRuns(){const runs=await J('/api/runs');
 
 async function tick(){if(!runId)return;
   try{const d=await J('/api/runs/'+runId);setConn(true);
+    try{sessionStats=await J('/api/attack-stats');}catch(e){}
     const last=d.timeline[d.timeline.length-1];
-    const sig=[d.run_id,d.timeline.length,last?last.seq:0,d.status,d.taken_down].join('|');
+    const ss=sessionStats?[sessionStats.attacks,sessionStats.survived,sessionStats.agents_refused].join(','):'';
+    const sig=[d.run_id,d.timeline.length,last?last.seq:0,d.status,d.taken_down,ss].join('|');
     if(sig!==lastSig){lastSig=sig;cache=d;renderStats(d);renderActive();}
   }catch(e){setConn(false);}}
 
@@ -403,6 +411,7 @@ function renderStats(d){
     tile('Mission',esc(d.mission),'cy','glass')+
     tile('Agents certified',d.agents_certified,'cy','glass')+
     tile('Alarms',(d.alarms||[]).length,(d.alarms||[]).length?'no':'go','glass')+
+    attackTile(sessionStats)+
     costTile(d.cost)+
     (d.rehearsal_proof?tile('Rehearsal','🔒 egress '+esc(d.rehearsal_proof.egress),'cy','glass'):'');
   const ap=$('#apill'),n=(d.alarms||[]).length;ap.hidden=!n;ap.textContent=n;
@@ -410,6 +419,10 @@ function renderStats(d){
   renderRail(d);
 }
 function tile(k,v,cls,extra){return `<div class="tile ${extra}"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div></div>`;}
+function attackTile(s){if(!s||!s.attacks)return '';
+  return `<div class="tile glass" title="Adversarial probes fired at agents across this whole session"><div class="k">Attacks survived</div>
+    <div class="v go">${s.survived}/${s.attacks}</div>
+    <div class="costsub2">${s.agents_refused} agent${s.agents_refused===1?'':'s'} refused${s.breaches?' · '+s.breaches+' breach'+(s.breaches===1?'':'es'):''}</div></div>`;}
 function costTile(c){if(!c||!c.present)return '';
   const usd=(c.estimated_cost_usd||0),s=(c.wall_clock_s||0),t=(c.total_tokens||0);
   const v=`$${usd.toFixed(4)} <span class="costsub">~est</span>`;
@@ -509,7 +522,15 @@ function renderIntel(d){
 function renderGauntlet(d){
   const g=d.gauntlet||[];
   if(!g.length){$('#gauntlet').innerHTML='<div class="glass empty">No admission runs yet — launch a mission above.</div>';return;}
-  $('#gauntlet').innerHTML=`<div class="gintro">⚔ <b>THE PROVING GROUND</b> — every agent must survive the gauntlet to be trusted.
+  const s=sessionStats||{};
+  const sb=s.attacks?`<div class="scoreboard glass">
+    <div class="sbi"><div class="sbn">${s.attacks}</div><div class="sbl">attacks run</div></div>
+    <div class="sbi"><div class="sbn go">${s.survived}</div><div class="sbl">survived</div></div>
+    <div class="sbi"><div class="sbn ${s.breaches?'no':''}">${s.breaches}</div><div class="sbl">breaches</div></div>
+    <div class="sbi"><div class="sbn">${s.agents_refused}</div><div class="sbl">agents refused</div></div>
+    <div class="sbi"><div class="sbn cy">${s.survival_rate!=null?Math.round(s.survival_rate*100)+'%':'—'}</div><div class="sbl">survival rate</div></div>
+    <div class="sbnote">session-wide · every adversarial probe ever fired in this dashboard</div></div>`:'';
+  $('#gauntlet').innerHTML=sb+`<div class="gintro">⚔ <b>THE PROVING GROUND</b> — every agent must survive the gauntlet to be trusted.
     Each lane is a real model; each obstacle a real attack class. The agent runs · swims · cycles the course and
     <b style="color:var(--no)">trips on a real canary leak</b>; survive all of it and it earns a <b style="color:var(--gold)">gold medal</b>.
     <span class="rp" id="rp">↻ replay</span></div>`+
