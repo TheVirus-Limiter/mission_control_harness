@@ -36,7 +36,9 @@ Copy `.env.example` to `.env`. Everything is optional:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | `--real` (Claude worker / judge) | optional |
 | `OPENAI_API_KEY` | `--real` (OpenAI worker / judge) | optional |
-| `NVIDIA_API_KEY` | `--real` (NVIDIA NIM judge) | OpenAI-compatible endpoint |
+| `NVIDIA_API_KEY` | `--real` (NVIDIA NIM judges) | **one key activates the whole NIM bunch** (DeepSeek, Mistral, Qwen, Gemma, Phi, Llama, Nemotron…) |
+| `MAX_JUDGES` | cap panel size | optional, cost control |
+| `OLLAMA_HOST` | local judges via Ollama | e.g. `http://localhost:11434/v1` |
 | `DRY_RUN` | posting | defaults to `1`; a real post needs `0` |
 | `X_API_KEY` / `X_API_SECRET` / `X_ACCESS_TOKEN` / `X_ACCESS_TOKEN_SECRET` | real X posting | absence keeps dry-run |
 
@@ -51,6 +53,7 @@ python harness.py                       # launch mission, mock workers, no keys
 python harness.py --reject-demo         # a sketchy agent fails Admission, is refused
 python harness.py --faulty-grader       # meta_check catches a broken judge, escalates
 python harness.py --block-demo          # a medical claim is HELD at Rehearsal, never posts
+python harness.py --full-panel          # show the whole judge roster (Claude + GPT + NVIDIA NIM bunch) as mocks
 python harness.py --real                # use real models (falls back to mocks per missing key)
 python harness.py --mission missions/nonprofit.yaml   # different job, zero code change
 python harness.py --replay-from rehearsal --run <id>  # resume a saved run from a checkpoint

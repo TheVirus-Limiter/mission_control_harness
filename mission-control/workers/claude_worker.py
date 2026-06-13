@@ -78,10 +78,16 @@ def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str
         tokens = resp.usage.input_tokens + resp.usage.output_tokens
         return text, tokens
 
-    # openai + nvidia both use the OpenAI client
+    # openai, nvidia (NIM) and ollama all speak the OpenAI protocol.
     from openai import OpenAI
 
-    client = OpenAI(api_key=os.environ[env_key], base_url=base_url)
+    if provider == "ollama":
+        # env_key holds the host URL (e.g. http://localhost:11434/v1); the key
+        # itself is a placeholder Ollama ignores.
+        client = OpenAI(api_key="ollama",
+                        base_url=os.environ.get(env_key) or "http://localhost:11434/v1")
+    else:
+        client = OpenAI(api_key=os.environ[env_key], base_url=base_url)
     resp = client.chat.completions.create(
         model=model, max_tokens=1024,
         messages=[{"role": "system", "content": system},

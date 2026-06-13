@@ -70,6 +70,7 @@ class Harness:
         faulty_grader: bool = False,
         reject_demo: bool = False,
         block_demo: bool = False,
+        full_panel: bool = False,
         approver=None,
     ):
         self.mission_path = mission_path
@@ -81,6 +82,7 @@ class Harness:
         self.faulty_grader = faulty_grader
         self.reject_demo = reject_demo
         self.block_demo = block_demo
+        self.full_panel = full_panel
         self.budgets = self.mission.get("budgets", {})
         self.input = self.mission.get("input", {})
         self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
@@ -161,17 +163,26 @@ class Harness:
             except Exception as e:  # pragma: no cover - defensive
                 console.print(f"[yellow]![/] real judges unavailable ({e}) -- using the mock panel")
 
-        judges: list[Worker] = [
-            MockReviewer("anthropic-claude (mock)"),
-            MockReviewer("openai-gpt (mock)"),
-            MockReviewer("nvidia-nim (mock)"),
-        ]
+        if self.full_panel:
+            # Mirror the full declared roster (Anthropic + OpenAI + the whole
+            # NVIDIA NIM bunch) as deterministic mock judges, so the panel is
+            # visible without any API key. Each is a real unanimous-consent
+            # reviewer; the "(mock)" label keeps it honest.
+            from models.judges import roster_names
+
+            judges: list[Worker] = [MockReviewer(n + " (mock)") for n in roster_names()]
+        else:
+            judges = [
+                MockReviewer("anthropic-claude (mock)"),
+                MockReviewer("openai-gpt (mock)"),
+                MockReviewer("nvidia-nim (mock)"),
+            ]
         if self.faulty_grader:
             # one judge hallucinates a citation -> meta_check catches it.
-            judges[1] = FaultyReviewer("openai-gpt (mock, FAULTY)")
+            judges[1] = FaultyReviewer(judges[1].name + " [FAULTY]")
         if self.block_demo:
             # one judge legitimately holds an unsupported-claim criterion.
-            judges[1] = HeldReviewer("openai-gpt (mock, strict)")
+            judges[1] = HeldReviewer(judges[1].name + " [strict]")
         return judges
 
     # -- task + ctx assembly ------------------------------------------------
@@ -598,6 +609,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--reject-demo", action="store_true", help="demo: a sketchy agent fails Admission")
     p.add_argument("--block-demo", action="store_true",
                    help="demo: an unsupported medical claim is HELD at Rehearsal and never posts")
+    p.add_argument("--full-panel", action="store_true",
+                   help="show the full declared judge roster (Anthropic + OpenAI + the NVIDIA NIM bunch) as mock judges")
     p.add_argument("--replay-from", default=None, help="resume a saved run from this stage")
     p.add_argument("--run", default=None, help="run id to replay")
     p.add_argument("--yes", action="store_true", help="auto-approve the human hold (non-interactive)")
@@ -607,7 +620,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     approver = auto_approver if args.yes else _cli_approver
     h = Harness(args.mission, store, real=args.real,
                 faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
-                block_demo=args.block_demo, approver=approver)
+                block_demo=args.block_demo, full_panel=args.full_panel, approver=approver)
 
     if args.replay_from and not args.run:
         console.print("[red]--replay-from requires --run <id>[/]")

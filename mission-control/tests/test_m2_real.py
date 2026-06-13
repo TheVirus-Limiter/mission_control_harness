@@ -1,10 +1,10 @@
 """M2: real-model panel is declared config and swaps in with no harness change;
 the harness degrades gracefully when keys are absent."""
 
-from models.judges import PANEL, build_real_judges
+from models.judges import NIM_CATALOG, PANEL, build_real_judges
 from workers.claude_worker import build_real_worker, parse_json_loose
 
-KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY"]
+KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY", "OLLAMA_HOST", "MAX_JUDGES"]
 
 
 def _clear_keys(monkeypatch):
@@ -50,6 +50,38 @@ def test_build_real_worker_picks_present_provider(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake")
     w = build_real_worker("writer")
     assert w is not None and w.provider == "openai" and w.available is True
+
+
+def test_one_nvidia_key_activates_the_nim_bunch(monkeypatch):
+    _clear_keys(monkeypatch)
+    monkeypatch.setenv("NVIDIA_API_KEY", "fake")
+    judges = build_real_judges()
+    assert len(judges) >= 8, "a single NVIDIA key should light up the whole NIM bunch"
+    assert all(j.cfg.provider == "nvidia" for j in judges)
+    # distinct models, all on the NIM endpoint
+    assert len({j.cfg.model for j in judges}) == len(judges)
+    assert all(j.cfg.base_url == "https://integrate.api.nvidia.com/v1" for j in judges)
+
+
+def test_nim_catalog_spans_many_families():
+    ids = " ".join(model for _, model, _ in NIM_CATALOG).lower()
+    for family in ("deepseek", "mistral", "qwen", "gemma", "phi", "llama", "nemotron"):
+        assert family in ids, f"expected a {family} model in the NIM catalog"
+
+
+def test_max_judges_caps_the_panel(monkeypatch):
+    _clear_keys(monkeypatch)
+    monkeypatch.setenv("NVIDIA_API_KEY", "fake")
+    monkeypatch.setenv("MAX_JUDGES", "3")
+    assert len(build_real_judges()) == 3
+
+
+def test_ollama_is_opt_in(monkeypatch):
+    _clear_keys(monkeypatch)
+    assert build_real_judges() == []                       # off by default
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434/v1")
+    judges = build_real_judges()
+    assert judges and all(j.cfg.provider == "ollama" for j in judges)
 
 
 def test_parse_json_loose_strips_fences():

@@ -109,8 +109,13 @@ Before a post touches the world it is rehearsed:
   sandbox** (`network_disabled()` blocks `socket`), proving the payload is
   constructed and inspected without any possibility of being sent;
 * a **multi-model panel** (declared in `models/judges.py`: Anthropic + OpenAI +
-  NVIDIA NIM, each at a declared strictness profile) reviews the post against the
-  mission's `rubric_criteria`, returning a verdict of a fixed shape;
+  a whole **NVIDIA NIM catalog** — DeepSeek, Mistral/Mixtral, Qwen, Gemma, Phi,
+  Llama, Nemotron — plus optional local Ollama judges, each at a declared
+  strictness profile) reviews the post against the mission's `rubric_criteria`,
+  returning a verdict of a fixed shape. Every NIM model rides the same
+  OpenAI-compatible endpoint, so **one `NVIDIA_API_KEY` activates the entire
+  bunch** and adding a model is a one-line edit to `NIM_CATALOG` — zero harness
+  change. This is the swappability guarantee made vivid;
 * every verdict is audited by **`meta_check`** (§5);
 * results are aggregated by **unanimous consent** (§6).
 
