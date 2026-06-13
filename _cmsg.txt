@@ -1,0 +1,18 @@
+breathtaking UI redesign + interactive observability + confetti/CERTIFIED stamp
+
+- ui/static/index.html: full visual overhaul. Animated aurora + grid backdrop,
+  glassmorphism, gradient/neon accents, premium type (Space Grotesk / Inter /
+  JetBrains Mono), gold for certified. Stat tiles, glowing pipeline flow with
+  animated connectors, segmented tabs. API_BASE fallback so a static preview can
+  reach a running server.
+- New INTEL tab (observability): "what it searched" (query + source cards with
+  domains/links) and "what the model wrote" — every draft attempt with the
+  flagged spans highlighted inline (<mark> + tooltip) and the failing checks
+  listed. Backend already logs draft attempts + research query/sources.
+- GAUNTLET: richer colored discipline lanes; on full survival a gold medal +
+  a CERTIFIED stamp SLAM and a canvas confetti burst; trips on a real breach.
+- BROADCAST: refined fake-X with vendor-colored avatars, verified handles,
+  streaming judge replies, approve/hold marks; confetti on approve.
+- tests: 64 green (added research/flagged-drafts observability test).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

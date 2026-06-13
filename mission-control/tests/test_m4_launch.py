@@ -57,3 +57,26 @@ def test_launch_starts_a_dry_run_and_completes(tmp_db, monkeypatch):
 
 def test_launch_unknown_mission_404(tmp_db):
     assert _client(tmp_db).post("/api/launch", json={"mission": "nope"}).status_code == 404
+
+
+def test_observability_research_and_flagged_drafts(tmp_db):
+    """The view surfaces what it searched (query + sources) and what the model
+    wrote each attempt with the spans that got flagged."""
+    import os
+    from harness import Harness, auto_approver
+    from materials import Store
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    store = Store(tmp_db)
+    run_id = Harness(os.path.join(root, "missions", "lumora.yaml"), store,
+                     approver=auto_approver).run()
+    store.close()
+
+    view = _client(tmp_db).get(f"/api/runs/{run_id}").json()
+    assert view["research"]["query"] and view["research"]["sources"]      # what/where it searched
+    drafts = view["drafts"]
+    assert len(drafts) >= 2                                                # bad draft + revision
+    assert any(d["flags"] for d in drafts)                                # something got flagged
+    flagged = next(d for d in drafts if d["flags"])
+    assert all("check" in f for f in flagged["flags"])
+    assert any(d["ok"] for d in drafts)                                   # the final draft passed
