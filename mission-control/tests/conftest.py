@@ -1,0 +1,21 @@
+"""Test fixtures. Puts the project root on sys.path so tests import the
+top-level modules (harness, materials, ...) exactly as harness.py does."""
+
+import os
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+
+@pytest.fixture
+def tmp_db(tmp_path):
+    return str(tmp_path / "test.db")
+
+
+@pytest.fixture
+def launch_mission():
+    return os.path.join(ROOT, "missions", "launch.yaml")

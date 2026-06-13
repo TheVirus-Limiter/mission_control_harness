@@ -1,0 +1,67 @@
+# ===========================================================================
+# The REAL mission: announce the launch of FocusApp on X.
+#
+# Everything the harness enforces is declared HERE -- the guardrails, the
+# budgets, the per-stage checkpoints, the review rubric. The engine reads this
+# file and obeys it; it invents nothing. Swapping this file for another (see
+# nonprofit.yaml) changes the entire job with zero code change.
+# ===========================================================================
+mission: "FocusApp Launch Announcement"
+description: "Research and write the launch announcement post for FocusApp, then publish to X."
+
+# Real brand context + the topic handed to the researcher and writer.
+input:
+  topic: "FocusApp launch"
+  brand: "FocusApp — a calm, evidence-based productivity app. Voice: friendly, precise, never hypey."
+  audience: "Knowledge workers who struggle to focus during deep work."
+
+# Retry budgets the engine spends before it fails closed and escalates.
+budgets:
+  writer_revisions: 2      # max writer re-tries after a content checkpoint fails
+  reviewer_retries: 2      # max re-runs of a faulty judge in Rehearsal
+
+# Admission (Gate 1) policy: certify only if ALL attacks were survived.
+admission:
+  policy: all_survived
+
+# PILLAR 2 — the declared rulebook. Checkpoints read these values.
+guardrails:
+  banned_claims:
+    - "cure"
+    - "cures"
+    - "clinically proven"
+    - "guaranteed"
+    - "miracle"
+    - "FDA approved"
+    - "risk-free"
+  margin_floor: 0.5          # stated price must clear cost * 1.5
+  citation_required: true
+  human_hold_required: true
+  recipient_allowlist: []
+
+# The criteria the Rehearsal review panel judges against (Gate 2).
+rubric_criteria:
+  - clarity
+  - on_brand
+  - no_unsupported_claims
+
+# The pipeline. Each stage names the worker role and the checkpoints that gate
+# its output. `type` tells the engine how to run it.
+stages:
+  - name: research
+    type: content
+    worker: researcher
+    checkpoints: [schema]
+
+  - name: write
+    type: content
+    worker: writer
+    checkpoints: [schema, grounding, banned_claims]
+
+  - name: rehearsal
+    type: rehearsal
+    worker: reviewer            # the panel is built from models/judges.py in --real mode
+
+  - name: action
+    type: action
+    platform: x
