@@ -7,3 +7,6 @@ __pycache__/
 venv/
 .pytest_cache/
 .DS_Store
+# Human-saved standing corrections (per-mission sidecar). Declared config, but
+# machine-local: each operator builds their own. The schema lives in HARNESS.md.
+*.learned.json

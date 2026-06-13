@@ -81,6 +81,37 @@ class HarnessHalt(Exception):
         self.alarm = alarm
 
 
+def learned_guidance_path(mission_path: str) -> str:
+    """Sidecar file holding a mission's human-added standing corrections. Kept
+    separate so the (commented) mission YAML stays pristine; it is still DECLARED,
+    auditable config you can open and edit."""
+    base, _ = os.path.splitext(mission_path)
+    return base + ".learned.json"
+
+
+def load_learned_guidance(mission_path: str) -> list:
+    import json
+    p = learned_guidance_path(mission_path)
+    if os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                return [str(x) for x in (json.load(f) or [])]
+        except Exception:
+            return []
+    return []
+
+
+def append_learned_guidance(mission_path: str, text: str) -> list:
+    """Append a confirmed human correction as a standing guardrail. Future runs
+    load it. This is a rulebook edit, NOT a model update."""
+    import json
+    g = load_learned_guidance(mission_path)
+    g.append(str(text).strip())
+    with open(learned_guidance_path(mission_path), "w", encoding="utf-8") as f:
+        json.dump(g, f, indent=2)
+    return g
+
+
 def _validate_mission(mission, path: str) -> None:
     """Turn a malformed mission file into a clean, structured halt instead of a
     raw KeyError/AttributeError deep in the engine."""
@@ -125,12 +156,19 @@ class Harness:
         block_demo: bool = False,
         full_panel: bool = False,
         preset: Optional[str] = None,
+        human_feedback: Optional[str] = None,
         approver=None,
     ):
         self.mission_path = mission_path
         with open(mission_path, "r", encoding="utf-8") as f:
             self.mission = yaml.safe_load(f)
         _validate_mission(self.mission, mission_path)
+        # Merge any human-saved standing corrections (declared, from the sidecar)
+        # into the mission's guardrails before building them.
+        gblock = self.mission.setdefault("guardrails", {})
+        gblock["learned_guidance"] = (list(gblock.get("learned_guidance", []))
+                                      + load_learned_guidance(mission_path))
+        self.human_feedback = human_feedback  # this-run human correction (revise loop)
         self.guardrails = Guardrails.from_mission(self.mission)
         self.store = store
         self.real = real
@@ -292,6 +330,10 @@ class Harness:
             # declared policy handed to the writer as part of its brief (the
             # harness still enforces it independently at the checkpoint).
             "banned_claims": self.guardrails.banned_claims,
+            # standing human corrections the writer must follow (declared rulebook).
+            "learned_guidance": self.guardrails.learned_guidance,
+            # a one-off human correction for THIS run (the revise loop).
+            "human_feedback": self.human_feedback,
             # optional mission-declared demo content for the deterministic mocks.
             "demo": self.mission.get("demo", {}),
         }
@@ -347,6 +389,13 @@ class Harness:
         self.store.log(run_id, name, "stage", "start", detail={"worker": worker.name})
         task = self._build_task(stage, accumulated)
         feedback: Optional[str] = initial_feedback
+        # A human reviewer's one-off correction enters the revise loop as the
+        # writer's feedback on its FIRST attempt (it does not retrain anything).
+        if feedback is None and stage.get("worker") == "writer" and self.human_feedback:
+            feedback = ("A human reviewer rejected the previous post. Apply this "
+                        f"correction and rewrite: {self.human_feedback}")
+            self.store.log(run_id, name, "revision", "human-correction", ok=False,
+                           detail={"feedback": feedback})
         attempt = 0
 
         while True:

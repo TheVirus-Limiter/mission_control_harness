@@ -147,9 +147,11 @@ def _assemble(st: Store, run_id: str) -> dict:
         raise HTTPException(404, f"no such run: {run_id}")
 
     mission = run_id
+    mission_path = None
     for e in events:
         if e["kind"] == "run" and e["name"] == "start" and e["detail"]:
             mission = e["detail"].get("mission", run_id)
+            mission_path = e["detail"].get("path")
             break
 
     # status
@@ -235,6 +237,14 @@ def _assemble(st: Store, run_id: str) -> dict:
     post = _post_view(st, run_id, events)
     post_id = next((e["name"] for e in events if e["kind"] == "post"), None)
 
+    # ITEM 3: standing guardrails a human saved for this mission + any free-text
+    # corrections recorded on this run (a pure read; never a model update).
+    from harness import load_learned_guidance
+    learned_guidance = load_learned_guidance(mission_path) if mission_path else []
+    corrections = [{"name": e["name"], **(e["detail"] or {})}
+                   for e in events if e["kind"] == "revision"
+                   and e["name"] in ("human-reject", "human-correction")]
+
     timeline = [{"seq": i + 1, **_label(e)} for i, e in enumerate(events)]
     return {"run_id": run_id, "mission": mission, "status": status,
             "posted": posted, "awaiting": awaiting and not approved,
@@ -242,7 +252,8 @@ def _assemble(st: Store, run_id: str) -> dict:
             "taken_down": taken_down, "post_id": post_id,
             "agents_certified": agents_certified, "open_alarms": open_alarms,
             "rehearsal_proof": rehearsal_proof, "research": research, "drafts": drafts,
-            "revisions": revisions,
+            "revisions": revisions, "learned_guidance": learned_guidance,
+            "corrections": corrections,
             "timeline": timeline, "alarms": alarms, "gauntlet": gauntlet,
             "panel": panel, "post": post}
 
@@ -348,20 +359,30 @@ def _report(st: Store, run_id: str) -> dict:
         raise HTTPException(404, f"no such run: {run_id}")
     view = _assemble(st, run_id)
 
-    cfg = {}
+    cfg, mission_path = {}, None
     for e in events:
         if e["kind"] == "run" and e["name"] == "start" and (e["detail"] or {}).get("path"):
+            mission_path = e["detail"]["path"]
             try:
-                with open(e["detail"]["path"], encoding="utf-8") as f:
+                with open(mission_path, encoding="utf-8") as f:
                     cfg = yaml.safe_load(f) or {}
             except Exception:
                 cfg = {}
             break
+    from harness import load_learned_guidance
+    learned = load_learned_guidance(mission_path) if mission_path else []
+    if learned:
+        cfg.setdefault("guardrails", {})["learned_guidance"] = learned
 
     checkpoints = [{"stage": e["stage"], "name": e["name"], "ok": e["ok"], "evidence": e["detail"]}
                    for e in events if e["kind"] == "check"]
     certificates = [e["detail"] for e in events if e["kind"] == "certificate" and e["detail"]]
     approvals = [e["detail"] for e in events if e["kind"] == "approval" and e["detail"]]
+    # ITEM 3: a human reviewer's free-text corrections (the HOLD that triggered a
+    # re-run, and any correction wired into THIS run's writer revise loop).
+    corrections = [{"name": e["name"], **(e["detail"] or {})}
+                   for e in events if e["kind"] == "revision"
+                   and e["name"] in ("human-reject", "human-correction")]
     return {
         "run_id": run_id,
         "mission": view["mission"],
@@ -379,6 +400,7 @@ def _report(st: Store, run_id: str) -> dict:
         "rehearsal_proof": view["rehearsal_proof"],
         "panel": view["panel"],
         "human_approval": approvals,
+        "human_corrections": corrections,
         "alarms": view["alarms"],
         "cost": view.get("cost"),
         "timeline": view["timeline"],
@@ -443,6 +465,12 @@ def _report_html(r: dict) -> str:
         f"<td>{_h(a.get('context'))}</td><td>{_h(a.get('recommended_action'))}</td></tr>"
         for a in r["alarms"])
     apr = "".join(f"<tr>{kv(a)}</tr>" if isinstance(a, dict) else "" for a in r["human_approval"])
+    corrrows = "".join(
+        f"<tr><td>{'reviewer HOLD' if c.get('name') == 'human-reject' else 'applied to writer'}</td>"
+        f"<td>{_h(c.get('correction') or c.get('feedback'))}</td>"
+        f"<td class='{'ok' if c.get('saved_as_guardrail') else 'muted'}'>"
+        f"{'saved as standing guardrail' if c.get('saved_as_guardrail') else ('not saved' if c.get('name') == 'human-reject' else 'this run only')}</td></tr>"
+        for c in (r.get("human_corrections") or []))
     cost = r.get("cost") or {}
     out = r["outcome"]
     css = ("body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:24px auto;"
@@ -481,6 +509,7 @@ def _report_html(r: dict) -> str:
 <h3>Per-criterion consent (unanimous within voters)</h3>
 <table><tr><td class=k>Criterion</td><td class=k>Min tier</td><td class=k>Outcome</td><td class=k>Voters</td></tr>{crows}</table>
 <h2>7. Human hold</h2><table>{apr or '<tr><td class=muted>no approval recorded</td></tr>'}</table>
+{'<h2>7b. Reviewer corrections (declared — not model training)</h2><p class=muted>A human reviewer typed a free-text correction; it was fed to the writer&#39;s revise loop. Saving appends it to the mission&#39;s declared guardrails. No weights change.</p><table><tr><td class=k>Kind</td><td class=k>Correction</td><td class=k>Persistence</td></tr>'+corrrows+'</table>' if corrrows else ''}
 <h2>8. Alarms</h2>
 {'<table><tr><td class=k>Severity</td><td class=k>Type</td><td class=k>Context</td><td class=k>Recommended action</td></tr>'+alarmrows+'</table>' if alarmrows else '<p class=muted>no alarms — every gate clean</p>'}
 {'<h2>9. Cost &amp; latency</h2><table>'+kv(cost)+'</table>' if cost else ''}
@@ -660,6 +689,69 @@ def api_launch(body: dict = Body(default={})):
 
     threading.Thread(target=worker, daemon=True).start()
     return {"run_id": run_id, "mission": mission_key, "preset": preset, "scenario": scenario}
+
+
+@app.post("/api/runs/{run_id}/reject")
+def api_reject(run_id: str, body: dict = Body(default={})):
+    """Human reviewer HOLDS a post and types a free-text correction. Two effects,
+    both DECLARED -- never a model update:
+
+      (1) the correction is fed to the writer as the revision critique on the next
+          attempt (a fresh run is launched with `human_feedback` wired into the
+          existing revise loop);
+      (2) ONLY if `save` is true (an explicit, confirmed click) the correction is
+          appended as a soft guardrail to the mission's `*.learned.json` sidecar,
+          which every future run loads. An unconfirmed correction never persists.
+    """
+    correction = (body.get("correction") or "").strip()
+    if not correction:
+        raise HTTPException(400, "a correction is required")
+    save = bool(body.get("save"))
+
+    st = store()
+    try:
+        events = st.events(run_id)
+        mission_path = next((e["detail"]["path"] for e in events
+                             if e["kind"] == "run" and e["name"] == "start"
+                             and (e["detail"] or {}).get("path")), None)
+        if not mission_path:
+            raise HTTPException(404, f"no such run: {run_id}")
+        saved = False
+        if save:
+            from harness import append_learned_guidance
+            append_learned_guidance(mission_path, correction)
+            saved = True
+        st.log(run_id, "human", "revision", "human-reject", ok=False,
+               detail={"correction": correction, "saved_as_guardrail": saved})
+    finally:
+        st.close()
+
+    # Relaunch the mission with the correction wired into the writer's revise loop.
+    preset = body.get("preset") or None
+    scenario = body.get("scenario") or "normal"
+    real = bool(body.get("real")) or bool(preset)
+    flags = {"reject_demo": scenario == "reject", "block_demo": scenario == "block",
+             "faulty_grader": scenario == "faulty", "full_panel": scenario == "full"}
+    new_id = uuid.uuid4().hex[:8]
+
+    def worker():
+        from harness import Harness, auto_approver
+
+        os.environ["DRY_RUN"] = "1"
+        st2 = Store(DB_PATH)
+        try:
+            Harness(mission_path, st2, real=real, preset=preset, approver=auto_approver,
+                    human_feedback=correction, **flags).run(run_id=new_id)
+        except Exception as e:
+            try:
+                st2.log(new_id, "mission", "run", "error", ok=False, detail={"error": str(e)})
+            except Exception:
+                pass
+        finally:
+            st2.close()
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"ok": True, "run_id": new_id, "saved_as_guardrail": saved, "from_run": run_id}
 
 
 # ---------------------------------------------------------------------------

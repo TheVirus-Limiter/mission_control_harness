@@ -34,6 +34,23 @@ The **declared rulebook**, loaded from the mission YAML's `guardrails:` block:
 a rule and a checkpoint never hard-codes one.** Open the mission file and you can
 see exactly what the system will and won't allow, without reading any code.
 
+**The feedback-to-guardrail loop (declared, never training).** When a reviewer
+holds a post, they can type a free-text correction. It does two things, both of
+which are *rulebook* edits — **never a model update, weight change, or automatic
+rule promotion**:
+
+1. The correction is fed to the writer as the revision critique on the next
+   attempt (it enters the *existing* revise loop as human-supplied feedback).
+2. *Only* if the human explicitly confirms "save as a guardrail" is the correction
+   appended to `learned_guidance` — a soft, declared rule the writer's prompt
+   carries on every future run. It is persisted in a per-mission sidecar
+   (`<mission>.learned.json`) so the commented mission YAML stays pristine, and it
+   is surfaced in the run report and the mission's standing-guardrails view. An
+   *unconfirmed* correction is fed forward once and never persisted. Saving is
+   always a deliberate, confirmed click — nothing is promoted to a standing rule
+   automatically. There is no fine-tuning anywhere in this path; "learned" here
+   means *a human wrote down a rule*, not *a model changed*.
+
 ### Pillar 3 — Checkpoints (`checkpoints.py`)
 The **inspection library**. Every checkpoint is a pure function
 `(env, ctx) -> CheckResult(name, ok, evidence)` with an explicit pass/fail and

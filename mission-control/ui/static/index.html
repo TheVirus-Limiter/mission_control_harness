@@ -281,6 +281,18 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
   border-radius:4px;padding:0 4px;font-weight:600;box-shadow:0 0 0 1px rgba(255,93,115,.4)}
 .heldwhy{margin-top:14px;border:1px solid rgba(255,93,115,.3);background:rgba(255,93,115,.06);border-radius:12px;padding:14px}
 .heldreason{font-size:14px;color:#ffd7dd;margin:4px 0} .heldreason b{color:var(--no);font-family:var(--mono)}
+.correct{margin-top:16px;padding:14px;border:1px solid rgba(63,224,255,.3);background:rgba(63,224,255,.05);border-radius:12px}
+.correct .ch{font-size:13px;color:var(--txt);margin-bottom:9px}
+.correct textarea{width:100%;box-sizing:border-box;min-height:60px;resize:vertical;background:rgba(255,255,255,.04);
+  border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--txt);font:inherit;font-size:14px}
+.correct .saveline{display:flex;gap:8px;align-items:center;margin:10px 0;font-size:13px;color:var(--mut);cursor:pointer}
+.correct .cbtns{display:flex;gap:10px}
+.correct .chint{margin-top:9px;font-size:11px;color:var(--faint);line-height:1.5}
+.lgbox h3{display:flex;align-items:center;gap:10px}
+.lgtag{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--cyan);
+  border:1px solid rgba(63,224,255,.4);border-radius:20px;padding:2px 9px}
+.lgsub{font-size:12px;color:var(--mut);margin:6px 0 10px}
+.lgrule{font-size:14px;color:var(--txt);font-family:var(--mono);padding:4px 0}
 
 /* timeline streaming */
 .ln.stream{animation:streamin .34s ease both}
@@ -442,7 +454,13 @@ function renderMission(d){
     <span class="bdg b-${tone[r.tone]||'mut'}">${esc(r.status)}</span>
     <span>${esc(r.text)}${r.meta?`<div class="mt">${esc(r.meta)}</div>`:''}</span></div>`;}).join('');
   mSeq[d.run_id]=d.timeline.length?d.timeline[d.timeline.length-1].seq:0;
+  const lg=d.learned_guidance||[];
+  const lgbox=lg.length?`<div class="glass pad lgbox" style="margin-bottom:16px">
+    <h3>📌 Standing guardrails <span class="lgtag">human-declared · not training</span></h3>
+    <div class="lgsub">Saved by a reviewer holding a post. The writer is told to follow these on every run; they edit the rulebook, not the model.</div>
+    ${lg.map(g=>`<div class="lgrule">▸ ${esc(g)}</div>`).join('')}</div>`:'';
   $('#mission').innerHTML=`<div class="glass pad" style="margin-bottom:16px"><div class="flow">${flow}</div></div>
+    ${lgbox}
     <div class="glass pad"><h3>Flight log</h3>
     <div class="filters">${['all','alarms','gates','checks'].map(f=>`<span class="chip ${tfilter===f?'on':''}" data-f="${f}">${f}</span>`).join('')}</div>
     <div class="console">${lines||'<div class="empty">no events</div>'}</div></div>`;
@@ -539,7 +557,8 @@ function renderBroadcast(d){
       <div class="xcard glass frozen"><div class="xtop"><div class="xrow"><div class="av ${vendorOf(brand2)}">${esc(initials(brand2))}</div>
         <div style="flex:1"><div class="who2"><span class="dn">${esc(brand2)}</span><span class="vf">✔</span><span class="hd">${esc(pp.author||'@brand')}</span></div>
         <div class="xbody big">${body}</div></div></div></div>
-      <div class="heldwhy">${why}</div></div>`;
+      <div class="heldwhy">${why}</div>${corrBoxHTML()}</div>`;
+    wireCorrBox();
     return;
   }
   if(d.halted||!(d.post||{}).present){const a=(d.alarms||[]).find(x=>['CERTIFICATION_FAILED','ESCALATE_HUMAN'].includes(x.type))||(d.alarms||[])[0];
@@ -560,13 +579,33 @@ function renderBroadcast(d){
         <div class="xact"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span><span class="cc ${p.within_limit===false?'over':''}">${p.char_count||0}/280</span></div></div></div></div>
       <div class="rephead">${consent} · replies from the review panel</div><div id="feed"></div></div>
     <div class="act">${d.awaiting?'<button class="btn run" id="apr">Approve &amp; post (dry-run)</button>':''}
-      ${d.can_takedown?'<button class="btn ghost danger" id="tkd">Take down (rollback)</button>':''}</div></div>`;
+      ${d.can_takedown?'<button class="btn ghost danger" id="tkd">Take down (rollback)</button>':''}</div>
+    ${d.awaiting?corrBoxHTML():''}</div>`;
+  if(d.awaiting)wireCorrBox();
   streamReplies(d,panel.judges||[]);
   const ab=$('#apr');if(ab)ab.onclick=async()=>{ab.disabled=true;ab.textContent='posting…';
     const j=await(await fetch(API+'/api/runs/'+runId+'/approve',{method:'POST'})).json();
     if(!j.ok){ab.disabled=false;ab.textContent='Approve & post (dry-run)';alert(j.reason);}else{const w=$('.xcard').getBoundingClientRect();confetti(w.left+w.width/2,w.top+60);}lastSig=null;twKey=null;tick();};
   const tb=$('#tkd');if(tb)tb.onclick=async()=>{if(!confirm('Take down (record rollback)?'))return;tb.disabled=true;await fetch(API+'/api/runs/'+runId+'/takedown',{method:'POST'});lastSig=null;tick();};
 }
+/* ITEM 3: a held/awaiting post lets a human type a correction. It is fed to the
+   writer's revise loop on a fresh run; ticking the checkbox (with a confirm)
+   ALSO saves it as a standing, declared guardrail for the mission. Never a model
+   update -- it edits the rulebook, not the weights. */
+function corrBoxHTML(){return `<div class="correct glass">
+    <div class="ch">✍️ <b>Reviewer correction</b> — tell the writer what to change. This is a declared instruction, not a model update.</div>
+    <textarea id="corr" placeholder="e.g. Too salesy — drop the hype and lead with the 4-week trial result."></textarea>
+    <label class="saveline"><input type="checkbox" id="corrSave"> Save as a standing guardrail for this mission (every future run will follow it)</label>
+    <div class="cbtns"><button class="btn run" id="corrSend">Send correction &amp; re-run</button></div>
+    <div class="chint">Re-runs the mission with your note wired into the writer's revise loop. Saving appends it to this mission's declared guardrails — a rulebook edit, not training.</div></div>`;}
+function wireCorrBox(){const cs=$('#corrSend');if(!cs)return;
+  cs.onclick=async()=>{const t=($('#corr').value||'').trim();if(!t){alert('Type a correction first.');return;}
+    const save=$('#corrSave').checked;
+    if(save && !confirm('Save this as a STANDING guardrail for "'+(cache&&cache.mission||'this mission')+'"?\n\nEvery future run will be told to follow it. This edits the declared rulebook (it does NOT retrain any model).'))return;
+    cs.disabled=true;cs.textContent='re-running…';
+    let j;try{j=await(await fetch(API+'/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correction:t,save:save})})).json();}catch(e){j=null;}
+    if(!j||!j.ok){cs.disabled=false;cs.textContent='Send correction & re-run';alert((j&&j.reason)||'could not submit correction');return;}
+    runId=j.run_id;location.hash=runId;lastSig=null;gKey=null;twKey=null;await loadRuns();$('#runsel').value=runId;tick();};}
 async function streamReplies(d,judges){const feed=$('#feed');if(!feed)return;
   const key=d.run_id+'|'+judges.length+'|'+d.status;const anim=twKey!==key;twKey=key;feed.innerHTML='';
   for(const j of judges){const v=vendorOf(j.name);

@@ -25,6 +25,10 @@ class Guardrails:
     citation_required: bool = True
     human_hold_required: bool = True
     recipient_allowlist: list[str] = field(default_factory=list)
+    # Soft, DECLARED rules a human added by holding a post and saving a correction
+    # ("too salesy", "don't compare to competitors"). The writer is told to follow
+    # them on future runs; they are not a model update -- they are rulebook edits.
+    learned_guidance: list[str] = field(default_factory=list)
 
     @classmethod
     def from_mission(cls, mission: dict) -> "Guardrails":
@@ -35,6 +39,7 @@ class Guardrails:
             citation_required=bool(g.get("citation_required", True)),
             human_hold_required=bool(g.get("human_hold_required", True)),
             recipient_allowlist=list(g.get("recipient_allowlist", [])),
+            learned_guidance=list(g.get("learned_guidance", [])),
         )
 
     def as_dict(self) -> dict:
@@ -44,4 +49,5 @@ class Guardrails:
             "citation_required": self.citation_required,
             "human_hold_required": self.human_hold_required,
             "recipient_allowlist": self.recipient_allowlist,
+            "learned_guidance": self.learned_guidance,
         }

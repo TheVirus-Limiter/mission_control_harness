@@ -148,6 +148,10 @@ def _write_prompt(task: dict, feedback: Optional[str]) -> tuple[str, str]:
             f"Approved facts (cite by id): {json.dumps(facts)}\n"
             f"Banned phrases (never use): {banned}\n"
             f"Topic: {task.get('topic')}")
+    guidance = task.get("learned_guidance") or []
+    if guidance:
+        user += ("\n\nStanding reviewer guidance (a human added these rules; ALWAYS follow): "
+                 + "; ".join(str(g) for g in guidance))
     if feedback:
         user += f"\n\nYour previous draft was rejected. Fix EVERY issue:\n{feedback}"
     return system, user
