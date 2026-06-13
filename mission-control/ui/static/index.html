@@ -1043,8 +1043,8 @@ function postedCard(){
   const post=view.post||{};const live=!!post.live;
   return `<div class="glass" style="border-color:${live?'rgba(255,84,102,.45)':'rgba(53,255,158,.4)'}">
     <div style="color:${live?'var(--no)':'var(--go)'};font-weight:600">● ${live?'Posted · LIVE on X':'Posted · dry run'}${(!sel.human&&!live)?' · <span style="font-family:var(--mono);font-size:11px;color:var(--cyan)">AUTO-APPROVED (human gate off)</span>':''}</div>
-    <p class="sub" style="margin:6px 0">${live?'Published to X for real. A takedown is armed — use it to delete the live post.':'Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.'}</p>
-    <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep/status/${esc(post.post_id||'0')}" target="_blank">🔗 x.com/lumorasleep/status/${esc(post.post_id||'0')}${live?'':' (dry-run)'}</a>
+    <p class="sub" style="margin:6px 0">${live?'Published to X for real — it\'s live on the @lumorasleep profile. A takedown is armed.':'Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.'}</p>
+    <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep" target="_blank">🔗 ${live?'See it on @lumorasleep':'View @lumorasleep'} on X →</a>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn ghost" id="dlj">⤓ audit.json</button>
       <button class="btn ghost" id="dlh">⎙ report</button>
