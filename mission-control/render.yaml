@@ -1,22 +1,50 @@
 # Render.com blueprint. Deploy with: New + > Blueprint > point at this repo.
 # (Railway works too: it auto-detects the Procfile.)
+#
+# Safety: DRY_RUN defaults to "1" (every run is a dry run). A real X post happens
+# ONLY when you click "Pass & post" with the LIVE toggle on -- the server enables
+# live for that single request. Safe by default; posts for real on demand.
 services:
   - type: web
     name: mission-control
     runtime: python
     rootDir: mission-control
+    plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn ui.server:app --host 0.0.0.0 --port $PORT"
+    startCommand: "uvicorn ui.server:app --host 0.0.0.0 --port $PORT --workers 1"
+    autoDeploy: true
     envVars:
       # Pin the Python version for a reproducible build.
       - key: PYTHON_VERSION
         value: "3.12.7"
-      # Posting stays SAFE in the cloud: dry-run, no keys required. Even if you
-      # later add keys, the dashboard launch path is non-interactive -> dry-run.
+      # Safe default: dry-run. Live posting is enabled per-request by /api/approve
+      # when you use the LIVE toggle; this just means "never post live unless asked".
       - key: DRY_RUN
         value: "1"
-      # The dashboard reads/writes this SQLite file (ephemeral on free plans;
-      # click RUN MISSION in the UI to generate runs in the cloud).
+      # Real review-panel size. 6 = the diverse six (good + affordable). Every judge
+      # is a paid call per real run, so keep this modest for a live demo.
+      - key: MAX_JUDGES
+        value: "6"
+      # The dashboard reads/writes this SQLite file (ephemeral on free plans).
       - key: MISSION_DB
         value: "mission.db"
-    plan: free
+      # ---- secrets: set these in the Render dashboard (sync:false = NOT in git) ----
+      # AI providers (any subset works; the SELECT grid only lights models you key).
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      # Real web research for the WRITE phase.
+      - key: TAVILY_API_KEY
+        sync: false
+      # X (Twitter) OAuth 1.0a user-context creds — REQUIRED only for LIVE posting.
+      - key: X_API_KEY
+        sync: false
+      - key: X_API_SECRET
+        sync: false
+      - key: X_ACCESS_TOKEN
+        sync: false
+      - key: X_ACCESS_TOKEN_SECRET
+        sync: false
