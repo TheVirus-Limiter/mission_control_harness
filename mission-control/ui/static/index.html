@@ -570,7 +570,7 @@ function runParams(){
   const sketchy=c&&c.key==='sketchy';
   const scenario=sketchy?'reject':(sel.inject==='held'?'block':sel.inject==='faulty'?'faulty':(preview?'full':'normal'));
   const preset=(c&&c.real)?c.key:null;   // real preset key -> server runs real (Tavily + real AI + real panel)
-  return {mission:sel.mission, preset, scenario, human_gate:sel.human, live:sel.live&&!preview};
+  return {mission:sel.mission, topic:sel.topic, preset, scenario, human_gate:sel.human, live:sel.live&&!preview};
 }
 async function launch(){
   cancelAuto();played.clear();seenSeq.clear();t0=null;failAt=null;critiques=[];
@@ -1054,8 +1054,9 @@ function wireApproval(){
   const pass=$('#pass');if(pass)pass.onclick=async()=>{
     if(sel.live&&!confirm('Publish this post to X for REAL, right now, as @lumorasleep?\n\nThis is a live, public post.'))return;
     pass.disabled=true;pass.textContent=sel.live?'publishing to X…':'posting…';
-    const j=await J('/api/runs/'+runId+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:sel.live})});
-    if(!j.ok){pass.disabled=false;pass.textContent='Pass & post';alert(j.reason||'refused');}else{await tick();playApproval();}};
+    let j;try{j=await J('/api/runs/'+runId+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({live:sel.live})});}catch(e){j=null;}
+    if(!j||!j.ok){pass.disabled=false;pass.textContent=sel.live?'Pass & post LIVE 🔴':'Pass & post';alert((j&&j.reason)||'the post failed — check the server logs');}
+    else{await tick();playApproval();}};
   const fail=$('#fail');if(fail)fail.onclick=()=>{
     $('#revbox').innerHTML=`<div class="glass" style="margin-top:12px"><div class="field-lbl" style="margin:0 0 8px">what should the writer change?</div>
       <textarea class="tinput" id="corr" style="min-height:70px" placeholder="e.g. drop the medical framing, lead with the ritual, keep every stat cited…"></textarea>

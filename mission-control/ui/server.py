@@ -665,20 +665,23 @@ def api_approve(run_id: str, body: dict = Body(default={})):
 
         # Live posting is opt-in per click: set DRY_RUN for THIS request only (and
         # restore it) so select_client picks RealXClient only when the human asked
-        # to go live AND the X creds are present. Default stays dry-run.
-        prev_dry = os.environ.get("DRY_RUN")
-        os.environ["DRY_RUN"] = "0" if live else "1"
-        try:
-            if live and not would_post_live():
-                return JSONResponse({"ok": False, "reason": "live requested but X credentials are not "
-                                     "configured — staying dry-run"}, status_code=409)
-            gate = ActionGate(st, Guardrails(human_hold_required=True), approver=approver, handle=handle)
-            record = gate.run(run_id, text)
-        finally:
-            if prev_dry is None:
-                os.environ.pop("DRY_RUN", None)
-            else:
-                os.environ["DRY_RUN"] = prev_dry
+        # to go live AND the X creds are present. Default stays dry-run. The
+        # _RUNS_LOCK serialises the DRY_RUN window so two concurrent approves can
+        # never cross wires (a live request can't make a dry request post live).
+        with _RUNS_LOCK:
+            prev_dry = os.environ.get("DRY_RUN")
+            os.environ["DRY_RUN"] = "0" if live else "1"
+            try:
+                if live and not would_post_live():
+                    return JSONResponse({"ok": False, "reason": "live requested but X credentials are "
+                                         "not configured — staying dry-run"}, status_code=409)
+                gate = ActionGate(st, Guardrails(human_hold_required=True), approver=approver, handle=handle)
+                record = gate.run(run_id, text)
+            finally:
+                if prev_dry is None:
+                    os.environ.pop("DRY_RUN", None)
+                else:
+                    os.environ["DRY_RUN"] = prev_dry
 
         st.log(run_id, "action", "stage", "pass", ok=True,
                detail={"post_id": record["post_id"], "mode": record["mode"]})
@@ -770,6 +773,7 @@ def api_launch(body: dict = Body(default={})):
     preset = body.get("preset") or None
     scenario = body.get("scenario") or "normal"   # normal|reject|block|faulty|full
     real = bool(body.get("real")) or bool(preset)
+    topic = (body.get("topic") or "").strip() or None   # dashboard topic box (overrides mission)
     # When the human-approval toggle is ON, the run blocks at the Action hold
     # (awaiting human) and only posts when the dashboard calls /api/approve.
     human_gate = bool(body.get("human_gate"))
@@ -789,7 +793,7 @@ def api_launch(body: dict = Body(default={})):
         st = Store(DB_PATH)
         try:
             Harness(mission_path, st, real=real, preset=preset, approver=approver,
-                    **flags).run(run_id=run_id)
+                    topic=topic, **flags).run(run_id=run_id)
         except Exception as e:
             try:
                 st.log(run_id, "mission", "run", "error", ok=False, detail={"error": str(e)})
@@ -841,6 +845,7 @@ def api_reject(run_id: str, body: dict = Body(default={})):
     preset = body.get("preset") or None
     scenario = body.get("scenario") or "normal"
     real = bool(body.get("real")) or bool(preset)
+    topic = (body.get("topic") or "").strip() or None
     human_gate = bool(body.get("human_gate"))
     flags = {"reject_demo": scenario == "reject", "block_demo": scenario == "block",
              "faulty_grader": scenario == "faulty", "full_panel": scenario == "full"}
@@ -853,7 +858,7 @@ def api_reject(run_id: str, body: dict = Body(default={})):
         st2 = Store(DB_PATH)
         try:
             Harness(mission_path, st2, real=real, preset=preset, approver=approver,
-                    human_feedback=correction, **flags).run(run_id=new_id)
+                    human_feedback=correction, topic=topic, **flags).run(run_id=new_id)
         except Exception as e:
             try:
                 st2.log(new_id, "mission", "run", "error", ok=False, detail={"error": str(e)})

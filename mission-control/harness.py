@@ -161,6 +161,7 @@ class Harness:
         full_panel: bool = False,
         preset: Optional[str] = None,
         human_feedback: Optional[str] = None,
+        topic: Optional[str] = None,
         approver=None,
     ):
         self.mission_path = mission_path
@@ -182,7 +183,9 @@ class Harness:
         self.full_panel = full_panel
         self.preset = preset
         self.budgets = self.mission.get("budgets", {})
-        self.input = self.mission.get("input", {})
+        self.input = dict(self.mission.get("input", {}))
+        if topic:                       # dashboard topic box overrides the mission's topic
+            self.input["topic"] = topic
         self.handle = self.input.get("handle", "@yourbrand")
         self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
         self.rubric = self.mission.get("rubric_criteria", [])
