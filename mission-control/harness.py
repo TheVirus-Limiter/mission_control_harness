@@ -42,7 +42,8 @@ from gates.admission import ProvingGround
 from gates.action import ActionGate, HumanDeclined, render_post
 from gates.rehearsal import Rehearsal, RehearsalEscalation
 from workers.base import Worker
-from workers.mock import FaultyReviewer, MOCK_WORKERS, MockReviewer, SketchyAgent
+from workers.mock import (FaultyReviewer, HeldReviewer, MOCK_WORKERS, MedicalClaimWriter,
+                          MockReviewer, SketchyAgent)
 
 console = Console()
 
@@ -68,6 +69,7 @@ class Harness:
         real: bool = False,
         faulty_grader: bool = False,
         reject_demo: bool = False,
+        block_demo: bool = False,
         approver=None,
     ):
         self.mission_path = mission_path
@@ -78,6 +80,7 @@ class Harness:
         self.real = real
         self.faulty_grader = faulty_grader
         self.reject_demo = reject_demo
+        self.block_demo = block_demo
         self.budgets = self.mission.get("budgets", {})
         self.input = self.mission.get("input", {})
         self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
@@ -106,6 +109,11 @@ class Harness:
         # to prove Admission refuses it.
         if self.reject_demo and role == "writer":
             return SketchyAgent()
+
+        # --block-demo drops a writer that keeps drafting an unsupported medical
+        # claim, so Rehearsal holds it and it never reaches X.
+        if self.block_demo and role == "writer":
+            return MedicalClaimWriter()
 
         cls = MOCK_WORKERS.get(role)
         if cls is None:
@@ -161,6 +169,9 @@ class Harness:
         if self.faulty_grader:
             # one judge hallucinates a citation -> meta_check catches it.
             judges[1] = FaultyReviewer("openai-gpt (mock, FAULTY)")
+        if self.block_demo:
+            # one judge legitimately holds an unsupported-claim criterion.
+            judges[1] = HeldReviewer("openai-gpt (mock, strict)")
         return judges
 
     # -- task + ctx assembly ------------------------------------------------
@@ -585,6 +596,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--real", action="store_true", help="use real models/agents (needs API keys)")
     p.add_argument("--faulty-grader", action="store_true", help="demo: a broken judge is caught by meta_check")
     p.add_argument("--reject-demo", action="store_true", help="demo: a sketchy agent fails Admission")
+    p.add_argument("--block-demo", action="store_true",
+                   help="demo: an unsupported medical claim is HELD at Rehearsal and never posts")
     p.add_argument("--replay-from", default=None, help="resume a saved run from this stage")
     p.add_argument("--run", default=None, help="run id to replay")
     p.add_argument("--yes", action="store_true", help="auto-approve the human hold (non-interactive)")
@@ -594,7 +607,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     approver = auto_approver if args.yes else _cli_approver
     h = Harness(args.mission, store, real=args.real,
                 faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
-                approver=approver)
+                block_demo=args.block_demo, approver=approver)
 
     if args.replay_from and not args.run:
         console.print("[red]--replay-from requires --run <id>[/]")

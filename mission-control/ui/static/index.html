@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mission Control</title>
+<style>
+  :root{
+    --bg:#0a0e14; --panel:#111722; --panel2:#0d131d; --line:#1f2a3a;
+    --ink:#e6edf3; --dim:#8b98a9; --accent:#39c0ed; --accent2:#7c5cff;
+    --go:#3fb950; --nogo:#f85149; --held:#e3a008; --med:#d29922; --crit:#ff5c5c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  header{display:flex;align-items:center;gap:16px;padding:14px 20px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0d131d,#0a0e14)}
+  .logo{font-weight:700;letter-spacing:.14em;color:var(--accent)}
+  .logo small{color:var(--dim);font-weight:400;letter-spacing:.06em}
+  header .spacer{flex:1}
+  select,button{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:7px 11px;font:inherit;cursor:pointer}
+  button.primary{background:var(--accent);color:#04222b;border-color:var(--accent);font-weight:700}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .badge{padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;border:1px solid}
+  .b-go{color:var(--go);border-color:#1f6f33;background:#0e2716}
+  .b-held{color:var(--held);border-color:#7a5a07;background:#2a2207}
+  .b-nogo{color:var(--nogo);border-color:#7a1f1f;background:#2a0e0e}
+  .b-run{color:var(--accent);border-color:#1d5a6b;background:#06222b}
+  nav{display:flex;gap:6px;padding:12px 20px 0}
+  nav .tab{padding:8px 16px;border:1px solid var(--line);border-bottom:none;
+    border-radius:9px 9px 0 0;background:var(--panel2);color:var(--dim)}
+  nav .tab.active{background:var(--panel);color:var(--ink);border-color:var(--accent)}
+  main{padding:18px 20px 60px}
+  .view{display:none} .view.active{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+
+  /* timeline */
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  td.seq{color:var(--dim);width:42px} td.stage{color:var(--accent2);width:120px}
+  .st{display:inline-block;min-width:74px;text-align:center;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700}
+  .t-go{color:var(--go)} .t-nogo{color:var(--nogo)} .t-held{color:var(--held)}
+  .t-med{color:var(--med)} .t-crit{color:var(--crit)} .t-muted{color:var(--dim)} .t-accent{color:var(--accent)}
+  .rowtext{color:var(--ink)} tr.bad td{background:rgba(248,81,73,.05)}
+
+  /* broadcast */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .xpost{max-width:540px}
+  .xhead{display:flex;align-items:center;gap:11px;margin-bottom:10px}
+  .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .xname{font-weight:700} .xhandle{color:var(--dim);font-size:13px}
+  .xtext{font-size:17px;line-height:1.5;white-space:pre-wrap;font-family:system-ui,Segoe UI,sans-serif}
+  .xmeta{margin-top:14px;padding-top:11px;border-top:1px solid var(--line);
+    display:flex;gap:14px;color:var(--dim);font-size:13px;align-items:center}
+  .dry{margin-left:auto;color:var(--med);border:1px solid #7a5a07;border-radius:6px;padding:2px 8px;font-weight:700}
+  .live{margin-left:auto;color:var(--nogo);border:1px solid #7a1f1f;border-radius:6px;padding:2px 8px;font-weight:700}
+  .reviewers{display:flex;flex-direction:column;gap:11px}
+  .rev{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel2)}
+  .rev .top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .rev .model{font-weight:700} .rev .reason{color:var(--dim);font-size:13px}
+  .consent{margin-top:4px;font-size:13px}
+  .note{color:var(--dim);font-size:12px;margin-top:10px}
+
+  /* gauntlet */
+  .track{margin:0 0 26px}
+  .track .who{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .who .stamp{margin-left:auto;font-weight:800;letter-spacing:.08em;padding:3px 12px;border-radius:7px;border:2px solid}
+  .stamp.ok{color:var(--go);border-color:var(--go)} .stamp.no{color:var(--nogo);border-color:var(--nogo)}
+  .obstacles{display:flex;gap:10px;flex-wrap:wrap}
+  .obs{flex:1;min-width:150px;border:1px solid var(--line);border-radius:10px;padding:11px;background:var(--panel2);position:relative;overflow:hidden}
+  .obs.fall{border-color:#7a1f1f;background:#1a0c0c}
+  .obs .icon{font-size:20px} .obs .name{font-size:12px;color:var(--dim);margin:4px 0}
+  .obs .res{font-weight:700} .obs.pass .res{color:var(--go)} .obs.fall .res{color:var(--nogo)}
+  .leak{margin-top:8px;font-size:11px;color:#ffb3b3;background:#240b0b;border:1px dashed #7a1f1f;
+    border-radius:6px;padding:6px;white-space:pre-wrap;word-break:break-word}
+  .runner{height:3px;background:linear-gradient(90deg,var(--accent),transparent);border-radius:2px;margin:10px 0 0;
+    animation:run 1.6s ease forwards}
+  @keyframes run{from{width:0}to{width:100%}}
+  .empty{color:var(--dim);padding:30px;text-align:center}
+  h2{font-size:14px;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;margin:0 0 12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">▣ MISSION&nbsp;CONTROL <small>· trust harness</small></div>
+  <div class="spacer"></div>
+  <span id="status" class="badge b-run">—</span>
+  <select id="runsel" title="select run"></select>
+  <button id="refresh" title="refresh">↻</button>
+</header>
+<nav>
+  <div class="tab active" data-v="timeline">Mission Timeline</div>
+  <div class="tab" data-v="broadcast">Broadcast &amp; Review</div>
+  <div class="tab" data-v="gauntlet">Admission Gauntlet</div>
+</nav>
+<main>
+  <section id="timeline" class="view active card"></section>
+  <section id="broadcast" class="view"></section>
+  <section id="gauntlet" class="view"></section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let current = null, timer = null;
+
+async function getJSON(u, opt){ const r = await fetch(u, opt); if(!r.ok && r.status>=500) throw new Error(r.status); return r.json(); }
+function esc(s){ return (s??'').toString().replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function loadRuns(){
+  const runs = await getJSON('/api/runs');
+  const sel = $('#runsel');
+  const keep = sel.value;
+  sel.innerHTML = runs.map(r=>`<option value="${r.run_id}">${esc(r.mission)} · ${r.run_id} · ${esc(r.status)}</option>`).join('');
+  if(runs.length){ current = (keep && runs.find(r=>r.run_id===keep)) ? keep : runs[0].run_id; sel.value = current; }
+  else { $('#timeline').innerHTML = '<div class="empty">No runs yet. Run <code>python harness.py</code> then refresh.</div>'; }
+}
+
+function statusBadge(s){
+  const b=$('#status'); b.textContent=s;
+  b.className='badge ' + (s.includes('posted')?'b-go': s==='halted'?'b-nogo': s.includes('awaiting')?'b-held':'b-run');
+}
+
+async function loadRun(){
+  if(!current) return;
+  const d = await getJSON('/api/runs/'+current);
+  statusBadge(d.status);
+  renderTimeline(d); renderBroadcast(d); renderGauntlet(d);
+}
+
+function renderTimeline(d){
+  const rows = d.timeline.map(r=>`
+    <tr class="${r.tone==='nogo'||r.tone==='crit'?'bad':''}">
+      <td class="seq">${r.seq}</td>
+      <td class="stage">${esc(r.stage)}</td>
+      <td><span class="st t-${r.tone}">${esc(r.status)}</span></td>
+      <td class="rowtext">${esc(r.text)}</td>
+    </tr>`).join('');
+  $('#timeline').innerHTML = `<table>
+    <thead><tr><th>#</th><th>stage</th><th>status</th><th>event</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function renderBroadcast(d){
+  const p = d.post||{};
+  const flag = p.posted ? (p.live?'<span class="live">LIVE</span>':'<span class="dry">DRY RUN</span>')
+                        : '<span class="dry">STAGED — not sent</span>';
+  const postCard = !p.present ? '<div class="empty">No post yet.</div>' : `
+    <div class="card xpost">
+      <div class="xhead"><div class="avatar"></div>
+        <div><div class="xname">${esc(d.mission)}</div><div class="xhandle">${esc(p.author||'@focusapp')}</div></div></div>
+      <div class="xtext">${esc(p.text)}</div>
+      <div class="xmeta"><span>${p.char_count||0}/280</span>
+        <span>${p.post_id?('id '+esc(p.post_id)):''}</span>${flag}</div>
+    </div>`;
+
+  const panel = d.panel||{judges:[]};
+  let consent = '';
+  if(panel.present){
+    consent = panel.eligible
+      ? `<div class="consent badge b-go">UNANIMOUS CONSENT — publish-eligible</div>`
+      : `<div class="consent badge b-held">HELD — at least one judge flagged a criterion</div>`;
+  }
+  const cards = (panel.judges||[]).map(j=>{
+    const cls = j.verdict==='PASS'?'b-go':'b-held';
+    return `<div class="rev"><div class="top"><span class="model">${esc(j.name)}</span>
+      <span class="badge ${cls}">${esc(j.verdict)}</span></div>
+      <div class="reason">${esc(j.reason)}</div></div>`;
+  }).join('') || '<div class="empty">No review panel yet.</div>';
+
+  const approve = d.awaiting
+    ? `<button class="primary" id="approveBtn">Approve &amp; post (dry-run)</button>`
+    : '';
+
+  $('#broadcast').innerHTML = `<div class="grid">
+    <div><h2>Simulated X — exactly what would be sent</h2>${postCard}
+      <div style="margin-top:14px">${approve}</div></div>
+    <div><h2>Review panel · ${esc((panel.rubric||[]).join(', '))}</h2>
+      ${consent}<div class="reviewers" style="margin-top:11px">${cards}</div>
+      <div class="note">No likes, no scores, no averages — binary pass/fail per criterion, unanimous consent only.</div>
+    </div></div>`;
+
+  const btn = $('#approveBtn');
+  if(btn) btn.onclick = async ()=>{ btn.disabled=true; btn.textContent='posting…';
+    const r = await fetch('/api/runs/'+current+'/approve',{method:'POST'});
+    await r.json(); loadRun(); };
+}
+
+function renderGauntlet(d){
+  const tracks = (d.gauntlet||[]).map(g=>{
+    const obs = g.attacks.map(a=>`
+      <div class="obs ${a.survived?'pass':'fall'}">
+        <div class="icon">${a.survived?'🛡️':'💥'}</div>
+        <div class="name">${esc(a.attack)}</div>
+        <div class="res">${a.survived?'SURVIVED':'BREACH'}</div>
+        ${a.survived?'':`<div class="leak">${esc(a.leaked||'')}</div>`}
+      </div>`).join('');
+    return `<div class="track">
+      <div class="who"><strong>${esc(g.agent)}</strong>
+        <span class="stamp ${g.certified?'ok':'no'}">${g.certified?'CERTIFIED':'REFUSED'}</span></div>
+      <div class="obstacles">${obs}</div>
+      <div class="runner"></div>
+    </div>`;
+  }).join('');
+  $('#gauntlet').innerHTML = tracks
+    ? `<div class="card"><h2>Each obstacle is one real attack · a fall is a real canary leak</h2>${tracks}</div>`
+    : '<div class="card empty">No admission runs recorded for this mission.</div>';
+}
+
+// nav
+document.querySelectorAll('nav .tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('nav .tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); $('#'+t.dataset.v).classList.add('active');
+});
+$('#runsel').onchange = e=>{ current=e.target.value; loadRun(); };
+$('#refresh').onclick = async ()=>{ await loadRuns(); loadRun(); };
+
+async function boot(){ await loadRuns(); await loadRun();
+  if(timer) clearInterval(timer);
+  timer = setInterval(loadRun, 2500); }
+boot().catch(e=>{ $('#timeline').innerHTML='<div class="empty">'+esc(e.message)+'</div>'; });
+</script>
+</body>
+</html>

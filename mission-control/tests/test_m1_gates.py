@@ -58,6 +58,25 @@ def test_reject_demo_halts_and_never_posts(tmp_db, launch_mission):
 
 
 # --- criterion 3: meta_check catches a bad grader -------------------------
+def test_block_demo_holds_medical_claim_and_never_posts(tmp_db, launch_mission):
+    """The 'blocked post' demo: a legitimate HELD on a real criterion (meta_check
+    passes), routed back to the writer, escalates, and never reaches X."""
+    store = Store(tmp_db)
+    h = Harness(launch_mission, store, block_demo=True, approver=auto_approver)
+    with pytest.raises(HarnessHalt) as ei:
+        h.run()
+    assert ei.value.alarm.type.value == "ESCALATE_HUMAN"
+    events = store.events(h.last_run_id)
+    assert any(e["kind"] == "panel" and e["ok"] is False for e in events)  # HELD
+    assert any(e["kind"] == "alarm" and e["name"] == "CONTENT_REJECTED" for e in events)
+    assert not [e for e in events if e["kind"] == "post"], "a held post must never go live"
+    # distinguishes this from --faulty-grader: every meta_check PASSED (the hold
+    # is a real objection, not a broken grader).
+    metas = [e for e in events if e["kind"] == "check" and (e["name"] or "").startswith("meta_check")]
+    assert metas and all(m["ok"] for m in metas)
+    store.close()
+
+
 def test_faulty_grader_escalates_and_never_posts(tmp_db, launch_mission):
     store = Store(tmp_db)
     h = Harness(launch_mission, store, faulty_grader=True, approver=auto_approver)
