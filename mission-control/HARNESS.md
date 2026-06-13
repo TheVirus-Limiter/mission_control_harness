@@ -118,6 +118,14 @@ Before an agent is assigned to **any** stage, the harness **attacks it**:
 The harness **refuses to assign an uncertified agent** to a stage and raises a
 `CERTIFICATION_FAILED` alarm with the failed attacks as context.
 
+This is a **real** test, not theater: probing the live models showed the gauntlet
+genuinely discriminates — **Claude Haiku 4.5, GPT-OSS 120B, Qwen3 Next 80B, GLM 5.1,
+Phi-4 mini survive all five**, while **GPT-4o mini, Mixtral 8x7B and Llama 4 Maverick
+breach** (mostly the banned-claim trap). Because re-probing every run is slow and
+costs tokens, those real certificates are cached in `admission_cache.json` (keyed by
+model id) and reused — admission drops from minutes to ~0ms while staying real data.
+Set `LIVE_ADMISSION=1` to force a fresh probe.
+
 ### Gate 2 — Rehearsal / Digital Twin (`gates/rehearsal.py`)
 Before a post touches the world it is rehearsed:
 
@@ -149,9 +157,18 @@ Before a post touches the world it is rehearsed:
   proceeds.
 * **`XClient`** has two implementations: `DryRunXClient` (default — records the
   would-be post, returns a fake id, marks it for the UI) and `RealXClient` (X API
-  v2 `POST /2/tweets`, used only when `DRY_RUN=0` **and** credentials present).
+  v2 `POST /2/tweets`, OAuth1 user-context). `select_client` returns the real one
+  **only** when every safety condition is met: `DRY_RUN=0`, X creds present, **and**
+  an *interactive* approver — so `--yes`, tests, and the dashboard auto-path can
+  never post live.
 * **takedown** — `takedown(post_id)` records a rollback (and calls the delete
   endpoint in real mode). This is the rollback story.
+* **Live posting from the dashboard is opt-in per click.** A run never posts on its
+  own (the human-gated launch parks at the hold; the auto path is non-interactive →
+  dry-run). `POST /api/runs/{id}/approve` takes a `live` flag and sets `DRY_RUN` for
+  *that one request only* (serialized under a lock, restored in `finally`), so a real
+  X post happens only when a human clicks **Pass & post** with the LIVE toggle on and
+  the creds are present. The default everywhere is dry-run.
 
 ---
 
@@ -332,12 +349,40 @@ A multi-agent review drove a round of safety/correctness hardening:
 * **Rehearsal egress** is a *proof-of-construction* that the payload builds
   offline, not a network jail around the judge LLM calls (§3, Gate 2). The hard
   no-post guarantee is the `rehearsal_active()` guard on `RealXClient.post`.
-* **Admission certificate cache** is keyed by `worker.name`, not object identity.
-  Acceptable because the harness builds every worker from declared config and the
-  cache is per-run; a name collision could only reuse a certificate among workers
-  the harness itself constructed. (Would key on identity if workers came from an
-  untrusted caller.)
+* **Admission certificate cache.** Within a run, certificates are cached by
+  `worker.name`. Across runs, `admission_cache.json` reuses the certificates from a
+  *real* gauntlet probe (keyed by model id) so the demo's admission is instant
+  rather than minutes of API calls — the pass/fail and leak evidence are real, only
+  the live re-probe is skipped (`LIVE_ADMISSION=1` forces a fresh probe). The cache
+  trusts declared model ids, which is safe here because the harness builds every
+  worker from declared config.
 * **Reproducibility:** `requirements.txt` pins direct deps to bounded ranges;
   `requirements.lock` is the exact `pip freeze` snapshot used in development.
 * Real-model runs take longer and can legitimately HOLD under strict consent;
-  the mock paths are deterministic and instant for a reliable demo.
+  the mock "preview" paths are deterministic and instant for a reliable demo.
+
+---
+
+## 12. The dashboard — a guided pipeline, in real or preview
+
+The dashboard (`ui/server.py` + a single-file `ui/static/index.html`) is **not a
+tabbed view of a finished run** — it is the run itself, as a full-viewport **guided
+pipeline** (`PICK › GAUNTLET › WRITE › REHEARSAL › APPROVE`). A persistent telemetry
+console streams the flight log across every phase, and each phase is a one-shot
+cinematic *over the real persisted data* (the gauntlet is a pixel-arcade skin over
+`gauntlet.attacks`; the rehearsal is a real-looking X client over `panel.judges`).
+
+* **Real vs preview.** The server loads `.env` on import, so picking a **real** model
+  runs the real pipeline — **Tavily** web research, a **real model** draft, a **real
+  multi-model review panel**, real token/cost telemetry. **Preview** cards run the
+  deterministic mocks (no API spend) for a reliable, instant demo.
+* **Honest human gate.** A human-gated launch uses a *defer-approver* (`DeferApproval`)
+  that parks the run at the Action hold in an `awaiting human` state — nothing posts
+  until the operator clicks **Pass & post** (→ `/api/approve`) or **Fail & revise**
+  (→ `/api/reject`, which feeds the correction back to the writer's revise loop and,
+  only on an explicit confirm, saves it as a declared standing guardrail).
+* **Live posting** is the opt-in path described in §3 (Gate 3): a red LIVE toggle,
+  forced human approval, a confirm, and a per-request `DRY_RUN=0`.
+* **Deployment:** `render.yaml` declares the service and env vars (secrets as
+  `sync: false`); `DRY_RUN` defaults to `1` so the cloud instance is safe by default
+  and posts for real only on demand.
