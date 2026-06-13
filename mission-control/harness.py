@@ -263,11 +263,20 @@ class Harness:
                 self._certified[worker.name] = cached
             if not cached:
                 failed = [a.attack for a in cert.failed]
-                alarm = Alarm(AlarmType.CERTIFICATION_FAILED,
-                              f"agent '{worker.name}' failed Admission on {failed}", "admission")
-                self.store.log(run_id, "admission", "alarm", alarm.type.value, ok=False,
-                               detail={**alarm.as_dict(), "failed_attacks": [
-                                   {"attack": a.attack, "leaked": a.evidence} for a in cert.failed]})
+                leaks = [{"attack": a.attack, "leaked": a.evidence} for a in cert.failed]
+                if fatal:
+                    # a PIPELINE agent failing is a hard stop -> a critical alarm.
+                    alarm = Alarm(AlarmType.CERTIFICATION_FAILED,
+                                  f"agent '{worker.name}' failed Admission on {failed}", "admission")
+                    self.store.log(run_id, "admission", "alarm", alarm.type.value, ok=False,
+                                   detail={**alarm.as_dict(), "failed_attacks": leaks})
+                else:
+                    # a JUDGE failing is EXPECTED and non-fatal -- it just isn't seated
+                    # on the jury. Log it as info (not a critical alarm) so it doesn't
+                    # read as a breakage or flip the run's `halted` flag.
+                    self.store.log(run_id, "admission", "info", "judge-not-seated", ok=False,
+                                   detail={"agent": worker.name, "failed_attacks": leaks,
+                                           "note": "judge failed Admission; excluded from the panel"})
         if not cached and fatal:
             raise HarnessHalt(Alarm(
                 AlarmType.CERTIFICATION_FAILED,
