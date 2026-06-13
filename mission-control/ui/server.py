@@ -19,6 +19,7 @@ approval and performs the dry-run post -- the same governed path the CLI uses.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
@@ -32,7 +33,7 @@ if BASE_DIR not in sys.path:
 
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from gates.action import DryRunXClient, build_x_payload, render_post
@@ -297,6 +298,158 @@ def _post_view(st: Store, run_id: str, events) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Audit report: every governed run produces a complete, exportable audit trail.
+# A PURE READ over the store (+ the declared mission file for input/guardrails).
+# ---------------------------------------------------------------------------
+def _report(st: Store, run_id: str) -> dict:
+    import datetime
+    import yaml
+
+    events = st.events(run_id)
+    if not events:
+        raise HTTPException(404, f"no such run: {run_id}")
+    view = _assemble(st, run_id)
+
+    cfg = {}
+    for e in events:
+        if e["kind"] == "run" and e["name"] == "start" and (e["detail"] or {}).get("path"):
+            try:
+                with open(e["detail"]["path"], encoding="utf-8") as f:
+                    cfg = yaml.safe_load(f) or {}
+            except Exception:
+                cfg = {}
+            break
+
+    checkpoints = [{"stage": e["stage"], "name": e["name"], "ok": e["ok"], "evidence": e["detail"]}
+                   for e in events if e["kind"] == "check"]
+    certificates = [e["detail"] for e in events if e["kind"] == "certificate" and e["detail"]]
+    approvals = [e["detail"] for e in events if e["kind"] == "approval" and e["detail"]]
+    return {
+        "run_id": run_id,
+        "mission": view["mission"],
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "input": cfg.get("input", {}),
+        "declared_guardrails": cfg.get("guardrails", {}),
+        "criterion_profiles": cfg.get("criterion_profiles", {}),
+        "outcome": {"status": view["status"], "posted": view["posted"], "post": view["post"]},
+        "admission": {"agents_certified": view["agents_certified"], "certificates": certificates,
+                      "gauntlet": view["gauntlet"]},
+        "research": view["research"],
+        "drafts": view["drafts"],
+        "checkpoints": checkpoints,
+        "rehearsal_proof": view["rehearsal_proof"],
+        "panel": view["panel"],
+        "human_approval": approvals,
+        "alarms": view["alarms"],
+        "cost": view.get("cost"),
+        "timeline": view["timeline"],
+    }
+
+
+def _h(s) -> str:
+    return (str(s) if s is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _report_html(r: dict) -> str:
+    def kv(d):
+        return "".join(f"<tr><td class=k>{_h(k)}</td><td>{_h(v)}</td></tr>" for k, v in (d or {}).items())
+    # admission
+    certrows = ""
+    for c in r["admission"]["certificates"]:
+        att = "".join(
+            f"<li class='{'ok' if a.get('survived') else 'no'}'>{_h(a.get('attack'))}: "
+            f"{'survived' if a.get('survived') else 'BREACH — ' + _h(a.get('evidence'))}</li>"
+            for a in c.get("attacks", []))
+        certrows += (f"<tr><td>{_h(c.get('agent'))}</td>"
+                     f"<td class='{'ok' if c.get('certified') else 'no'}'>"
+                     f"{'CERTIFIED' if c.get('certified') else 'REFUSED'}</td>"
+                     f"<td><ul class=att>{att}</ul></td></tr>")
+    # checkpoints
+    chkrows = "".join(
+        f"<tr><td>{_h(c['stage'])}</td><td>{_h(c['name'])}</td>"
+        f"<td class='{'ok' if c['ok'] else 'no'}'>{'GO' if c['ok'] else 'NO-GO'}</td>"
+        f"<td class=ev>{_h(json.dumps(c['evidence'], default=str))[:300]}</td></tr>"
+        for c in r["checkpoints"])
+    # drafts
+    draftblocks = ""
+    for d in r["drafts"]:
+        flags = "".join(f"<li>{_h(f.get('check'))}: {_h(f.get('reason'))}"
+                        + (f" — “{_h(f.get('span'))}”" if f.get("span") else "") + "</li>"
+                        for f in d.get("flags", []))
+        draftblocks += (f"<div class=draft><b>Attempt #{_h(d.get('attempt'))}</b> "
+                        f"<span class='{'ok' if d.get('ok') else 'no'}'>"
+                        f"{'passed checks' if d.get('ok') else 'flagged'}</span>"
+                        f"<p class=body>{_h(d.get('text'))}</p>"
+                        + (f"<ul class=flags>{flags}</ul>" if flags else "") + "</div>")
+    # panel
+    p = r["panel"] or {}
+    jrows = "".join(
+        f"<tr><td>{_h(j.get('name'))}</td><td>{_h(j.get('profile'))}</td>"
+        f"<td class='{'ok' if j.get('pass') else 'no'}'>{_h(j.get('verdict'))}</td>"
+        f"<td>{_h(', '.join(j.get('covers', [])))}</td><td>{_h(j.get('comment'))}</td></tr>"
+        for j in p.get("judges", []))
+    crows = "".join(
+        f"<tr><td>{_h(c)}</td><td>{_h(o.get('min_tier'))}</td>"
+        f"<td class='{'ok' if o.get('passed') else 'no'}'>{'PASS' if o.get('passed') else 'HELD'}</td>"
+        f"<td>{_h(', '.join(o.get('voters', [])))}</td></tr>"
+        for c, o in (p.get("criteria_outcomes") or {}).items())
+    # research / sources
+    srcrows = ""
+    if r["research"]:
+        for k, v in (r["research"].get("facts") or {}).items():
+            src = (r["research"].get("sources") or {}).get(k, "")
+            srcrows += f"<tr><td class=k>[{_h(k)}]</td><td>{_h(v)}</td><td>{_h(src)}</td></tr>"
+    alarmrows = "".join(
+        f"<tr><td class=no>{_h(a.get('severity'))}</td><td>{_h(a.get('type'))}</td>"
+        f"<td>{_h(a.get('context'))}</td><td>{_h(a.get('recommended_action'))}</td></tr>"
+        for a in r["alarms"])
+    apr = "".join(f"<tr>{kv(a)}</tr>" if isinstance(a, dict) else "" for a in r["human_approval"])
+    cost = r.get("cost") or {}
+    out = r["outcome"]
+    css = ("body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:24px auto;"
+           "padding:0 18px;color:#16202c;line-height:1.5}h1{margin:0}h2{border-bottom:2px solid #e2e8f0;"
+           "padding-bottom:6px;margin-top:30px;font-size:18px}table{width:100%;border-collapse:collapse;"
+           "margin:8px 0;font-size:13px}td{border:1px solid #e2e8f0;padding:6px 9px;vertical-align:top}"
+           "td.k{font-weight:600;width:200px;background:#f7fafc}.ok{color:#15803d;font-weight:600}"
+           ".no{color:#b91c1c;font-weight:600}.muted{color:#64748b}ul{margin:4px 0;padding-left:18px}"
+           ".att li.no{color:#b91c1c}.draft{border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin:8px 0}"
+           ".draft .body{white-space:pre-wrap;background:#f8fafc;padding:8px;border-radius:6px}"
+           "td.ev{font-family:monospace;font-size:11px;color:#475569}.badge{display:inline-block;padding:3px 12px;"
+           "border-radius:6px;font-weight:700}.b-go{background:#dcfce7;color:#15803d}.b-no{background:#fee2e2;color:#b91c1c}"
+           ".b-hold{background:#fef3c7;color:#b45309}@media print{h2{break-after:avoid}.draft{break-inside:avoid}}")
+    ob = "b-go" if out["posted"] else ("b-no" if out["status"] == "halted" else "b-hold")
+    return f"""<!DOCTYPE html><html><head><meta charset=utf-8><title>Audit Report — {_h(r['run_id'])}</title>
+<style>{css}</style></head><body>
+<h1>Mission Control — Governance Audit Report</h1>
+<p class=muted>Run <b>{_h(r['run_id'])}</b> · {_h(r['mission'])} · generated {_h(r['generated_at'])}</p>
+<p>Final outcome: <span class="badge {ob}">{_h(out['status'].upper())}</span></p>
+<h2>1. Mission input &amp; declared rulebook</h2>
+<table>{kv(r['input'])}</table>
+<h3>Declared guardrails</h3><table>{kv(r['declared_guardrails'])}</table>
+{'<h3>Criterion tiers</h3><table>'+kv(r['criterion_profiles'])+'</table>' if r['criterion_profiles'] else ''}
+<h2>2. Admission — the gauntlet ({_h(r['admission']['agents_certified'])} certified)</h2>
+<table><tr><td class=k>Agent</td><td class=k>Verdict</td><td class=k>Attacks</td></tr>{certrows}</table>
+<h2>3. Research — what it searched, where it looked</h2>
+{'<p class=muted>query: '+_h((r['research'] or {}).get('query'))+' · engine: '+_h((r['research'] or {}).get('engine'))+'</p><table><tr><td class=k>Fact</td><td class=k>Statement</td><td class=k>Source</td></tr>'+srcrows+'</table>' if r['research'] else '<p class=muted>no research recorded</p>'}
+<h2>4. Drafts — what the model wrote, and where it was flagged</h2>
+{draftblocks or '<p class=muted>no drafts</p>'}
+<h2>5. Content checkpoints (deterministic)</h2>
+<table><tr><td class=k>Stage</td><td class=k>Check</td><td class=k>Result</td><td class=k>Evidence</td></tr>{chkrows}</table>
+<h2>6. Rehearsal — the digital twin &amp; the panel</h2>
+{'<p class=muted>🔒 rehearsed with network egress '+_h((r['rehearsal_proof'] or {}).get('egress'))+' · '+_h((r['rehearsal_proof'] or {}).get('byte_len'))+' bytes byte-identical to live</p>' if r['rehearsal_proof'] else ''}
+<p>Panel verdict: <b class="{'ok' if p.get('eligible') else 'no'}">{'UNANIMOUS CONSENT — publish-eligible' if p.get('eligible') else 'HELD'}</b></p>
+<table><tr><td class=k>Judge</td><td class=k>Tier</td><td class=k>Verdict</td><td class=k>Votes on</td><td class=k>Comment</td></tr>{jrows}</table>
+<h3>Per-criterion consent (unanimous within voters)</h3>
+<table><tr><td class=k>Criterion</td><td class=k>Min tier</td><td class=k>Outcome</td><td class=k>Voters</td></tr>{crows}</table>
+<h2>7. Human hold</h2><table>{apr or '<tr><td class=muted>no approval recorded</td></tr>'}</table>
+<h2>8. Alarms</h2>
+{'<table><tr><td class=k>Severity</td><td class=k>Type</td><td class=k>Context</td><td class=k>Recommended action</td></tr>'+alarmrows+'</table>' if alarmrows else '<p class=muted>no alarms — every gate clean</p>'}
+{'<h2>9. Cost &amp; latency</h2><table>'+kv(cost)+'</table>' if cost else ''}
+<p class=muted style=margin-top:40px>Generated by Mission Control. This report is a pure read over the run's persisted audit trail.</p>
+</body></html>"""
+
+
+# ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 @app.get("/api/runs")
@@ -308,6 +461,26 @@ def api_runs():
             view = _assemble(st, rid)
             out.append({"run_id": rid, "mission": view["mission"], "status": view["status"]})
         return out
+    finally:
+        st.close()
+
+
+@app.get("/api/runs/{run_id}/report")
+def api_report(run_id: str):
+    """The full governance audit trail for a run, as portable JSON."""
+    st = store()
+    try:
+        return _report(st, run_id)
+    finally:
+        st.close()
+
+
+@app.get("/api/runs/{run_id}/report.html")
+def api_report_html(run_id: str):
+    """The same audit trail as a clean, self-contained, printable HTML report."""
+    st = store()
+    try:
+        return HTMLResponse(_report_html(_report(st, run_id)))
     finally:
         st.close()
 

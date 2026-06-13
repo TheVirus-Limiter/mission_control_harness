@@ -307,6 +307,10 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
     <button class="btn run" id="launch">▶ RUN MISSION</button>
     <span class="sp"></span>
     <div class="field"><label>Inspect run</label><select id="runsel"></select></div>
+    <div class="field"><label>Audit report</label><div style="display:flex;gap:6px">
+      <button class="btn ghost" id="dlJson" title="Download the full audit trail as JSON">⬇ JSON</button>
+      <button class="btn ghost" id="dlHtml" title="Open a printable HTML audit report">⬇ HTML</button>
+    </div></div>
   </div>
   <div class="stats" id="stats"></div>
   <div class="rail" id="rail" aria-label="trust lifecycle"></div>
@@ -590,6 +594,8 @@ function selTab(t){active=t;document.querySelectorAll('.tab').forEach(x=>x.setAt
 document.querySelectorAll('.tab').forEach((t,i,all)=>{t.onclick=()=>selTab(t.dataset.v);
   t.onkeydown=e=>{if(e.key==='ArrowRight')all[(i+1)%all.length].click();if(e.key==='ArrowLeft')all[(i-1+all.length)%all.length].click();};});
 $('#runsel').onchange=e=>{runId=e.target.value;location.hash=runId;lastSig=null;gKey=null;twKey=null;tick();};
+$('#dlJson').onclick=()=>{if(!runId)return;const a=document.createElement('a');a.href=API+'/api/runs/'+runId+'/report';a.download='audit-'+runId+'.json';document.body.appendChild(a);a.click();a.remove();};
+$('#dlHtml').onclick=()=>{if(!runId)return;window.open(API+'/api/runs/'+runId+'/report.html','_blank');};
 addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==runId){runId=h;lastSig=null;gKey=null;twKey=null;loadRuns().then(tick);}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInterval(timer);timer=null;}else if(!timer){tick();timer=setInterval(tick,2000);}});
 

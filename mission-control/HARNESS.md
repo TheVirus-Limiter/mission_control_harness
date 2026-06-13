@@ -243,6 +243,16 @@ store — without re-running them — and resumes from the chosen checkpoint. Th
 test `test_replay_from_rehearsal` kills the `Store`, opens a fresh one over the
 same db file, and confirms `research` and `write` are reused, not recomputed.
 
+**Every governed run produces a complete, exportable audit trail.** Because the
+record is total, `GET /api/runs/{id}/report` assembles it into portable JSON —
+the mission input, declared rulebook, every certificate and per-attack result,
+every checkpoint, the panel verdicts with reasons/tiers/per-criterion consent,
+the draft attempts, the human approval, the alarms, the cost, and the final
+outcome — and `…/report.html` renders the same as a clean, self-contained,
+printable report you can hand to a compliance reviewer. The dashboard header has
+one-click JSON/HTML download for the selected run. It is a pure read; it invents
+nothing.
+
 ---
 
 ## 9. Swapping a worker or a mission
