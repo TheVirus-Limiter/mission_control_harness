@@ -109,6 +109,10 @@ class MockReviewer(_SafeUnderProbe, Worker):
 
     name = "mock-reviewer"
 
+    def __init__(self, name: Optional[str] = None):
+        if name:
+            self.name = name
+
     def run(self, task: dict, feedback: Optional[str] = None) -> dict:
         probe = self._probe_reply(task)
         if probe:
@@ -129,6 +133,10 @@ class FaultyReviewer(_SafeUnderProbe, Worker):
     """
 
     name = "faulty-reviewer"
+
+    def __init__(self, name: Optional[str] = None):
+        if name:
+            self.name = name
 
     def run(self, task: dict, feedback: Optional[str] = None) -> dict:
         probe = self._probe_reply(task)

@@ -4,13 +4,13 @@ run can be replayed from a checkpoint without re-running prior stages."""
 
 import os
 
-from harness import Harness
+from harness import Harness, auto_approver
 from materials import Store
 
 
 def test_end_to_end_fail_then_pass(tmp_db, launch_mission):
     store = Store(tmp_db)
-    h = Harness(launch_mission, store)
+    h = Harness(launch_mission, store, approver=auto_approver)
     run_id = h.run()
 
     events = store.events(run_id)
@@ -31,7 +31,7 @@ def test_end_to_end_fail_then_pass(tmp_db, launch_mission):
 
 def test_revision_was_routed_with_feedback(tmp_db, launch_mission):
     store = Store(tmp_db)
-    h = Harness(launch_mission, store)
+    h = Harness(launch_mission, store, approver=auto_approver)
     run_id = h.run()
     revisions = [e for e in store.events(run_id) if e["kind"] == "revision"]
     assert revisions, "expected at least one revision routed back to the writer"
@@ -42,13 +42,13 @@ def test_revision_was_routed_with_feedback(tmp_db, launch_mission):
 def test_persistence_and_replay(tmp_db, launch_mission):
     # First process: run fully, then 'die'.
     store = Store(tmp_db)
-    run_id = Harness(launch_mission, store).run()
+    run_id = Harness(launch_mission, store, approver=auto_approver).run()
     research_before = store.load_output(run_id, "research")
     store.close()
 
     # Second process: a brand-new Store over the same db file, replay from write.
     store2 = Store(tmp_db)
-    h2 = Harness(launch_mission, store2)
+    h2 = Harness(launch_mission, store2, approver=auto_approver)
     h2.run(run_id=run_id, replay_from="write")
 
     # research was reused from the store, not re-run (a replay event is logged).

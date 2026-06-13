@@ -19,9 +19,14 @@ Run modes (CLI)
 from __future__ import annotations
 
 import argparse
+import os
 import time
 import uuid
 from typing import Optional
+
+# Resolve default paths relative to this file so `python harness.py` works from
+# any working directory.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 import yaml
 from rich.console import Console
@@ -33,8 +38,11 @@ from alarms import Alarm, AlarmType, Severity
 from checkpoints import CONTENT_CHECK_ALARM, REGISTRY, STAGE_SCHEMAS
 from guardrails import Guardrails
 from materials import Envelope, Store
+from gates.admission import ProvingGround
+from gates.action import ActionGate, HumanDeclined, render_post
+from gates.rehearsal import Rehearsal, RehearsalEscalation
 from workers.base import Worker
-from workers.mock import MOCK_WORKERS
+from workers.mock import FaultyReviewer, MOCK_WORKERS, MockReviewer, SketchyAgent
 
 console = Console()
 
@@ -60,6 +68,7 @@ class Harness:
         real: bool = False,
         faulty_grader: bool = False,
         reject_demo: bool = False,
+        approver=None,
     ):
         self.mission_path = mission_path
         with open(mission_path, "r", encoding="utf-8") as f:
@@ -71,6 +80,13 @@ class Harness:
         self.reject_demo = reject_demo
         self.budgets = self.mission.get("budgets", {})
         self.input = self.mission.get("input", {})
+        self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
+        self.rubric = self.mission.get("rubric_criteria", [])
+        admission_cfg = self.mission.get("admission", {}) or {}
+        self.proving_ground = ProvingGround(
+            store, self.guardrails, policy=admission_cfg.get("policy", "all_survived"))
+        self._certified: dict[str, bool] = {}  # worker.name -> certified (per run)
+        self.approver = approver or _cli_approver
 
     # -- worker assignment --------------------------------------------------
     def build_worker(self, role: str) -> Worker:
@@ -86,6 +102,11 @@ class Harness:
                 console.print(f"[yellow]![/] real worker for '{role}' unavailable -- using mock")
             except Exception as e:  # pragma: no cover - defensive
                 console.print(f"[yellow]![/] real workers unavailable ({e}) -- using mock")
+        # --reject-demo drops a sketchy, uncertified agent into the writer slot
+        # to prove Admission refuses it.
+        if self.reject_demo and role == "writer":
+            return SketchyAgent()
+
         cls = MOCK_WORKERS.get(role)
         if cls is None:
             raise HarnessHalt(
@@ -93,10 +114,54 @@ class Harness:
             )
         return cls()
 
+    # -- Gate 1: certify an agent before trusting it with any work ----------
+    def ensure_certified(self, worker: Worker, run_id: str) -> None:
+        """Run the Admission gauntlet (once per worker per run). Refuse to use an
+        agent that did not survive every attack -- fail closed."""
+        if self._certified.get(worker.name):
+            return
+        cert = self.proving_ground.certify(worker, run_id)
+        self._certified[worker.name] = cert.certified
+        if not cert.certified:
+            failed = [a.attack for a in cert.failed]
+            alarm = Alarm(
+                AlarmType.CERTIFICATION_FAILED,
+                f"agent '{worker.name}' failed Admission on {failed}; refusing to assign it to a stage",
+                "admission",
+            )
+            self.store.log(run_id, "admission", "alarm", alarm.type.value, ok=False,
+                           detail={**alarm.as_dict(), "failed_attacks": [
+                               {"attack": a.attack, "leaked": a.evidence} for a in cert.failed]})
+            raise HarnessHalt(alarm)
+
     def assign_worker(self, stage: dict, run_id: str) -> Worker:
-        """Assign a worker to a stage. In M1 this is gated by Admission: an
-        uncertified agent is refused here. (M0: assignment is direct.)"""
-        return self.build_worker(stage["worker"])
+        """Assign a worker to a stage -- but only after Admission certifies it."""
+        worker = self.build_worker(stage["worker"])
+        self.ensure_certified(worker, run_id)
+        return worker
+
+    # -- the Rehearsal review panel (swappable; built from config) ----------
+    def build_judges(self) -> list[Worker]:
+        if self.real:
+            try:
+                from models.judges import build_real_judges
+
+                judges = build_real_judges(self.faulty_grader)
+                if judges:
+                    return judges
+                console.print("[yellow]![/] no real judges available -- using the mock panel")
+            except Exception as e:  # pragma: no cover - defensive
+                console.print(f"[yellow]![/] real judges unavailable ({e}) -- using the mock panel")
+
+        judges: list[Worker] = [
+            MockReviewer("anthropic-claude (mock)"),
+            MockReviewer("openai-gpt (mock)"),
+            MockReviewer("nvidia-nim (mock)"),
+        ]
+        if self.faulty_grader:
+            # one judge hallucinates a citation -> meta_check catches it.
+            judges[1] = FaultyReviewer("openai-gpt (mock, FAULTY)")
+        return judges
 
     # -- task + ctx assembly ------------------------------------------------
     def _build_task(self, stage: dict, accumulated: dict) -> dict:
@@ -131,7 +196,8 @@ class Harness:
         return "\n".join(lines)
 
     # -- content stage (worker + checkpoints + revision routing) ------------
-    def run_content_stage(self, stage: dict, run_id: str, accumulated: dict) -> Envelope:
+    def run_content_stage(self, stage: dict, run_id: str, accumulated: dict,
+                          initial_feedback: Optional[str] = None) -> Envelope:
         name = stage["name"]
         worker = self.assign_worker(stage, run_id)
         checkpoints = stage.get("checkpoints", [])
@@ -139,7 +205,7 @@ class Harness:
 
         self.store.log(run_id, name, "stage", "start", detail={"worker": worker.name})
         task = self._build_task(stage, accumulated)
-        feedback: Optional[str] = None
+        feedback: Optional[str] = initial_feedback
         attempt = 0
 
         while True:
@@ -192,15 +258,71 @@ class Harness:
             self.store.log(run_id, name, "revision", f"revise->attempt-{attempt + 1}", ok=False,
                            detail={"feedback": feedback})
 
-    # -- placeholder stages, fully implemented in later milestones ----------
-    def run_pending_stage(self, stage: dict, run_id: str, accumulated: dict) -> None:
+    # -- Gate 2: Rehearsal, with HELD -> writer routing (branch 3) -----------
+    def run_rehearsal_stage(self, stage: dict, run_id: str, accumulated: dict) -> dict:
         name = stage["name"]
-        self.store.log(run_id, name, "stage", "pending", ok=None,
-                       detail={"note": f"stage '{name}' ({stage.get('type')}) wired in a later milestone"})
+        self.store.log(run_id, name, "stage", "start", detail={"gate": "digital-twin + panel"})
+        judges = self.build_judges()
+        for judge in judges:  # judges are agents too -- certify them before trusting them
+            self.ensure_certified(judge, run_id)
+
+        rehearsal = Rehearsal(self.store, self.guardrails, self.rubric,
+                              reviewer_retries=int(self.budgets.get("reviewer_retries", 2)))
+        budget = int(self.budgets.get("writer_revisions", 1))
+        held_revisions = 0
+
+        while True:
+            text = accumulated.get("draft", "")
+            try:
+                result = rehearsal.run(run_id, text, judges)
+            except RehearsalEscalation as e:
+                raise HarnessHalt(e.alarm)  # quality gate down -> fail closed
+
+            if result["eligible"]:
+                self.store.log(run_id, name, "stage", "pass", ok=True,
+                               detail={"eligible": True, "judges": list(result["verdicts"].keys())})
+                return result
+
+            # HELD: a legitimate content flag -> route back to the writer.
+            held = result["held"]
+            if held_revisions >= budget:
+                esc = Alarm(AlarmType.ESCALATE_HUMAN,
+                            f"panel HELD the post after {held_revisions} writer revision(s); "
+                            f"held criteria: {held}", name)
+                self.store.log(run_id, name, "alarm", esc.type.value, ok=False, detail=esc.as_dict())
+                raise HarnessHalt(esc)
+
+            held_revisions += 1
+            crit = Alarm(AlarmType.CONTENT_REJECTED,
+                         f"panel HELD the post on {[h['criterion'] for h in held]}", name)
+            self.store.log(run_id, name, "alarm", crit.type.value, ok=False, detail=crit.as_dict())
+            feedback = "The review panel HELD your post. Revise to fix: " + "; ".join(
+                f"[{h['criterion']}] {h['reason']}" for h in held)
+            self.store.log(run_id, name, "revision", f"held->writer-revision-{held_revisions}",
+                           ok=False, detail={"feedback": feedback})
+            # Re-run the writer with the panel's critique, then loop to re-rehearse.
+            self.run_content_stage(self.stage_by_name["write"], run_id, accumulated,
+                                   initial_feedback=feedback)
+
+    # -- Gate 3: Action, behind the human hold (dry-run by default) ----------
+    def run_action_stage(self, stage: dict, run_id: str, accumulated: dict) -> dict:
+        name = stage["name"]
+        text = accumulated.get("draft", "")
+        self.store.log(run_id, name, "stage", "start",
+                       detail={"rendered": render_post({"text": text})})
+        gate = ActionGate(self.store, self.guardrails, approver=self.approver)
+        try:
+            record = gate.run(run_id, text)
+        except HumanDeclined as e:
+            raise HarnessHalt(e.alarm)
+        self.store.log(run_id, name, "stage", "pass", ok=True,
+                       detail={"post_id": record["post_id"], "mode": record["mode"]})
+        return record
 
     # -- the run ------------------------------------------------------------
     def run(self, run_id: Optional[str] = None, replay_from: Optional[str] = None) -> str:
         run_id = run_id or uuid.uuid4().hex[:8]
+        self.last_run_id = run_id  # so the timeline renders even when a gate halts
         stages = self.mission["stages"]
 
         # Determine where to start (replay support).
@@ -227,14 +349,18 @@ class Harness:
             self.store.log(run_id, s["name"], "replay", "loaded-from-store", ok=True,
                            detail={"note": "skipped; reused persisted output"})
 
-        # Run the remaining stages.
+        # Run the remaining stages, dispatching by type.
         for s in stages[start:]:
             stype = s.get("type", "content")
             if stype == "content":
                 self.run_content_stage(s, run_id, accumulated)
+            elif stype == "rehearsal":
+                self.run_rehearsal_stage(s, run_id, accumulated)
+            elif stype == "action":
+                self.run_action_stage(s, run_id, accumulated)
             else:
-                # rehearsal / action arrive in M1/M2.
-                self.run_pending_stage(s, run_id, accumulated)
+                raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
+                                        f"unknown stage type '{stype}'", s.get("name", "?")))
 
         self.store.log(run_id, "mission", "run", "complete", ok=True, detail={"run_id": run_id})
         return run_id
@@ -295,6 +421,49 @@ def render_timeline(store: Store, run_id: str) -> None:
             status = Text("REPLAY", style="magenta")
             ev = Text(f"replay:{name}", style="magenta")
             det = Text(detail.get("note", ""), style="dim")
+        elif kind == "attack":
+            survived = bool(e["ok"])
+            status = Text("SURVIVED", style="green") if survived else Text("BREACH", style="bold red")
+            ev = Text(f"attack:{name}", style="green" if survived else "bold red")
+            det = (Text("resisted", style="green") if survived
+                   else Text(f"LEAK -> {detail.get('leaked', '')}", style="red"))
+        elif kind == "certificate":
+            certified = bool(e["ok"])
+            status = Text("CERTIFIED", style="bold green") if certified else Text("REFUSED", style="bold red")
+            ev = Text(f"certificate:{name}", style="bold")
+            det = Text(f"agent '{detail.get('agent')}' -> certified={certified} (policy={detail.get('policy')})",
+                       style="green" if certified else "red")
+        elif kind == "verdict":
+            status = Text("PASS", style="green") if e["ok"] else Text("HELD", style="dark_orange")
+            ev = Text(f"judge:{name}")
+            det = Text(f"overall={detail.get('overall')}", style="dim")
+        elif kind == "panel":
+            status = Text("GO", style="bold green") if e["ok"] else Text("HOLD", style="bold dark_orange")
+            ev = Text("panel:unanimous-consent", style="bold")
+            if e["ok"]:
+                det = Text(f"all judges passed: {detail.get('judges')}", style="green")
+            else:
+                det = Text(f"HELD: {detail.get('held')}", style="dark_orange")
+        elif kind == "approval":
+            status = Text("APPROVED", style="bold green") if e["ok"] else Text("DENIED", style="bold red")
+            ev = Text("human:approval", style="bold")
+            det = Text(f"mode={detail.get('mode')}", style="dim")
+        elif kind == "post":
+            status = Text("POSTED", style="bold green")
+            ev = Text("action:post", style="bold green")
+            det = Text.assemble((f"[{detail.get('mode')}] id={name}  ", "green"),
+                                (f"\"{detail.get('rendered', {}).get('text', '')}\"", "white"))
+        elif kind == "takedown":
+            status = Text("REMOVED", style="magenta")
+            ev = Text("action:takedown", style="magenta")
+            det = Text(f"post {name} taken down ({detail.get('mode')})", style="magenta")
+        elif kind == "gate":
+            status = Text("·", style="cyan")
+            ev = Text(f"gate:{name}", style="cyan")
+            if name == "digital-twin":
+                det = Text(f"byte-identical payload built, egress={detail.get('egress')}", style="cyan")
+            else:
+                det = Text(str({k: detail.get(k) for k in ("attacks", "forbidden_tools") if k in detail}), style="dim")
         elif kind == "stage":
             if name == "pass":
                 status = Text("GO", style="bold green")
@@ -337,10 +506,20 @@ def _fmt_check(name: str, ok: bool, detail: dict) -> Text:
 
 def _fmt_stage(name: str, detail: dict) -> Text:
     if name == "start":
-        return Text(f"worker = {detail.get('worker', '?')}", style="dim")
+        if "worker" in detail:
+            return Text(f"worker = {detail['worker']}", style="dim")
+        if "gate" in detail:
+            return Text(f"gate = {detail['gate']}", style="dim")
+        return Text("staged for human hold", style="dim")
     if name == "pass":
-        return Text(f"attempt {detail.get('attempt')} · {detail.get('seconds')}s · {detail.get('tokens')} tok",
-                    style="green")
+        if detail.get("attempt") is not None:
+            return Text(f"attempt {detail['attempt']} · {detail.get('seconds')}s · {detail.get('tokens')} tok",
+                        style="green")
+        if "post_id" in detail:
+            return Text(f"posted {detail['post_id']} ({detail.get('mode')})", style="green")
+        if "eligible" in detail:
+            return Text(f"publish-eligible · judges={detail.get('judges')}", style="green")
+        return Text("ok", style="green")
     if name == "pending":
         return Text(detail.get("note", ""), style="dim italic")
     return Text(str(detail), style="dim")
@@ -351,6 +530,8 @@ def _render_telemetry(events: list[dict]) -> None:
     for e in events:
         if e["kind"] == "stage" and e["name"] == "pass" and e["detail"]:
             d = e["detail"]
+            if d.get("attempt") is None:
+                continue  # only content stages carry per-attempt telemetry
             rows[e["stage"]] = (d.get("attempt"), d.get("seconds"), d.get("tokens"))
     if not rows:
         return
@@ -365,12 +546,39 @@ def _render_telemetry(events: list[dict]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Human-hold approvers
+# ---------------------------------------------------------------------------
+def _cli_approver(run_id: str, rendered: dict) -> bool:
+    """Interactive human hold. Shows the exact post and asks for approval.
+    A non-interactive stdin (no TTY) fails closed -- it does NOT post."""
+    console.print(Panel.fit(
+        Text.assemble(("HUMAN HOLD  ", "bold yellow"), ("Gate 3 / Action\n\n", "yellow"),
+                      (rendered.get("text", ""), "white"),
+                      (f"\n\n{rendered.get('char_count', 0)}/280 chars", "dim")),
+        title="staged post (dry-run unless DRY_RUN=0 + creds)", border_style="yellow"))
+    try:
+        ans = input("Approve this post? [y/N] ").strip().lower()
+    except EOFError:
+        console.print("[dim]no interactive input -- treating as NOT approved (fail closed)[/]")
+        return False
+    return ans in ("y", "yes")
+
+
+def auto_approver(run_id: str, rendered: dict) -> bool:
+    """Non-interactive auto-approval for tests and `--yes`. The approval is still
+    recorded in the store, satisfying the human-hold rule."""
+    return True
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Mission Control -- the harness.")
-    p.add_argument("--mission", default="missions/launch.yaml", help="path to the mission YAML")
-    p.add_argument("--db", default="mission.db", help="path to the SQLite store")
+    p.add_argument("--mission", default=os.path.join(BASE_DIR, "missions", "launch.yaml"),
+                   help="path to the mission YAML")
+    p.add_argument("--db", default=os.path.join(BASE_DIR, "mission.db"),
+                   help="path to the SQLite store")
     p.add_argument("--real", action="store_true", help="use real models/agents (needs API keys)")
     p.add_argument("--faulty-grader", action="store_true", help="demo: a broken judge is caught by meta_check")
     p.add_argument("--reject-demo", action="store_true", help="demo: a sketchy agent fails Admission")
@@ -380,8 +588,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = p.parse_args(argv)
 
     store = Store(args.db)
+    approver = auto_approver if args.yes else _cli_approver
     h = Harness(args.mission, store, real=args.real,
-                faulty_grader=args.faulty_grader, reject_demo=args.reject_demo)
+                faulty_grader=args.faulty_grader, reject_demo=args.reject_demo,
+                approver=approver)
 
     if args.replay_from and not args.run:
         console.print("[red]--replay-from requires --run <id>[/]")
@@ -392,7 +602,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         run_id = h.run(run_id=args.run, replay_from=args.replay_from)
     except HarnessHalt as halt:
+        run_id = run_id or getattr(h, "last_run_id", None)
         console.print(f"[bold red]HALT[/] {halt.alarm.type.value}: {halt.alarm.context}")
+        console.print(f"[dim]recommended action:[/] {halt.alarm.recommended_action}")
         code = 1
     finally:
         if run_id:
