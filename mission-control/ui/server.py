@@ -39,6 +39,16 @@ from fastapi.staticfiles import StaticFiles
 from gates.action import DryRunXClient, build_x_payload, render_post
 from materials import Store
 
+# Load mission-control/.env so the SERVER process has the API keys (Anthropic /
+# OpenAI / NVIDIA / Tavily) and X credentials. Without this the dashboard would
+# silently fall back to mock workers for every run. Never overrides vars already
+# set in the real environment (e.g. on Render).
+try:
+    from harness import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 DB_PATH = os.environ.get("MISSION_DB", os.path.join(BASE_DIR, "mission.db"))
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MISSIONS_DIR = os.path.join(BASE_DIR, "missions")
@@ -625,14 +635,15 @@ def api_run(run_id: str):
 
 
 @app.post("/api/runs/{run_id}/approve")
-def api_approve(run_id: str):
+def api_approve(run_id: str, body: dict = Body(default={})):
     """Dashboard human-hold approval. Routes through the SAME ActionGate the CLI
-    uses (one governed posting path), with a dashboard-interactive approver so it
-    can perform a real post when DRY_RUN=0 + creds are present. Refuses if the
-    panel is not publish-eligible or it already posted."""
+    uses (one governed posting path), with a dashboard-interactive approver. Default
+    is a dry-run; pass `live: true` to publish for real to X (requires the X creds).
+    Refuses if the panel is not publish-eligible or it already posted."""
     from guardrails import Guardrails
-    from gates.action import ActionGate, render_post
+    from gates.action import ActionGate, would_post_live
 
+    live = bool(body.get("live"))
     st = store()
     try:
         events = st.events(run_id)
@@ -652,11 +663,27 @@ def api_approve(run_id: str):
             return True
         approver.interactive = True  # type: ignore[attr-defined]
 
-        gate = ActionGate(st, Guardrails(human_hold_required=True), approver=approver, handle=handle)
-        record = gate.run(run_id, text)
+        # Live posting is opt-in per click: set DRY_RUN for THIS request only (and
+        # restore it) so select_client picks RealXClient only when the human asked
+        # to go live AND the X creds are present. Default stays dry-run.
+        prev_dry = os.environ.get("DRY_RUN")
+        os.environ["DRY_RUN"] = "0" if live else "1"
+        try:
+            if live and not would_post_live():
+                return JSONResponse({"ok": False, "reason": "live requested but X credentials are not "
+                                     "configured — staying dry-run"}, status_code=409)
+            gate = ActionGate(st, Guardrails(human_hold_required=True), approver=approver, handle=handle)
+            record = gate.run(run_id, text)
+        finally:
+            if prev_dry is None:
+                os.environ.pop("DRY_RUN", None)
+            else:
+                os.environ["DRY_RUN"] = prev_dry
+
         st.log(run_id, "action", "stage", "pass", ok=True,
                detail={"post_id": record["post_id"], "mode": record["mode"]})
-        return {"ok": True, "post_id": record["post_id"], "mode": record["mode"]}
+        return {"ok": True, "post_id": record["post_id"], "mode": record["mode"],
+                "live": bool(record.get("live"))}
     finally:
         st.close()
 
@@ -753,7 +780,11 @@ def api_launch(body: dict = Body(default={})):
     def worker():
         from harness import Harness, auto_approver  # lazy: heavy import
 
-        os.environ["DRY_RUN"] = "1"  # launches never post live
+        # No global DRY_RUN mutation: a run NEVER posts live on its own. The
+        # human-gated path parks at the hold (defer-approver); the auto path uses a
+        # non-interactive approver, which select_client always downgrades to
+        # dry-run. A real post can ONLY happen via an explicit, interactive
+        # /api/approve with live=true.
         approver = _defer_approver if human_gate else auto_approver
         st = Store(DB_PATH)
         try:
@@ -818,7 +849,6 @@ def api_reject(run_id: str, body: dict = Body(default={})):
     def worker():
         from harness import Harness, auto_approver
 
-        os.environ["DRY_RUN"] = "1"
         approver = _defer_approver if human_gate else auto_approver
         st2 = Store(DB_PATH)
         try:
