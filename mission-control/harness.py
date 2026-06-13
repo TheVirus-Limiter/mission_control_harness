@@ -28,6 +28,28 @@ from typing import Optional
 # any working directory.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def load_dotenv(path: Optional[str] = None) -> None:
+    """Minimal .env loader (no dependency). Loads KEY=VALUE lines from
+    BASE_DIR/.env into os.environ WITHOUT overriding variables already set in
+    the real environment -- so an explicit `DRY_RUN=1` in the shell always wins."""
+    path = path or os.path.join(BASE_DIR, ".env")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, val = line.partition("=")
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        pass
+
 import yaml
 from rich.console import Console
 from rich.panel import Panel
@@ -196,6 +218,8 @@ class Harness:
             # declared policy handed to the writer as part of its brief (the
             # harness still enforces it independently at the checkpoint).
             "banned_claims": self.guardrails.banned_claims,
+            # optional mission-declared demo content for the deterministic mocks.
+            "demo": self.mission.get("demo", {}),
         }
         return task
 
@@ -618,6 +642,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                    help="read-only check of your X credentials (GET /2/users/me; never posts)")
     args = p.parse_args(argv)
 
+    # Load mission-control/.env so credentials in that file are picked up.
+    load_dotenv()
+
     if args.verify_x:
         from gates.action import verify_x_credentials
 
@@ -633,6 +660,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             console.print(f"  missing: {res['missing']}")
         if res.get("status"):
             console.print(f"  HTTP {res['status']}: {res.get('body', '')}")
+        if res.get("error"):
+            console.print(f"  {res['error']}")
         if res.get("hint"):
             console.print(f"  [dim]{res['hint']}[/]")
         return 1

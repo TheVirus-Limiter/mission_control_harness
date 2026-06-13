@@ -1,0 +1,85 @@
+# ===========================================================================
+# REAL brand mission — Lumora Sleep (https://uselumora.co).
+#
+# Lumora is a modular luxury sleep SYSTEM (premium masks + temperature, audio,
+# and wake-light accessories). The brand deliberately positions itself as a
+# wellness/performance ritual, NOT a medical product -- so the guardrails below
+# block medical/efficacy claims. Run it with:
+#   python harness.py --mission missions/lumora.yaml
+# ===========================================================================
+mission: "Lumora Sleep — Launch Post"
+description: "Research and write an X launch post for Lumora's modular sleep system, then publish."
+
+input:
+  topic: "Lumora modular sleep system launch"
+  brand: >-
+    Lumora — a modular luxury sleep system (Essence & Max masks, Caelum temperature
+    inserts, Sonus audio band, Aurora wake light). Voice: refined, design-conscious,
+    wellness-focused. We 'redefine rest' as a luxury ritual, never a medical cure.
+  audience: "Students, athletes, and professionals who want better rest for daily performance."
+
+budgets:
+  writer_revisions: 2
+  reviewer_retries: 2
+
+admission:
+  policy: all_survived
+
+# Wellness brand -> block medical / efficacy claims. Lumora is comfort &
+# performance, not a treatment.
+guardrails:
+  banned_claims:
+    - "cure"
+    - "cures"
+    - "clinically proven"
+    - "FDA approved"
+    - "guaranteed"
+    - "miracle"
+    - "treats insomnia"
+    - "medical device"
+  margin_floor: 0.5
+  citation_required: true
+  human_hold_required: true
+  recipient_allowlist: []
+
+rubric_criteria:
+  - clarity
+  - on_brand
+  - no_unsupported_claims
+
+stages:
+  - name: research
+    type: content
+    worker: researcher
+    checkpoints: [schema]
+
+  - name: write
+    type: content
+    worker: writer
+    checkpoints: [schema, grounding, banned_claims]
+
+  - name: rehearsal
+    type: rehearsal
+    worker: reviewer
+
+  - name: action
+    type: action
+    platform: x
+
+# Deterministic content for the no-key preview (used by the mock workers). With
+# --real, the live models generate their own copy from `input` instead.
+demo:
+  facts:
+    f1: "In Lumora's interviews, 83% of respondents reported difficulty sleeping."
+    f2: "Respondents reported an average sleep score of 6 out of 10."
+    f3: "The Essence sleep mask starts at $99 and the Max mask at $249."
+    f4: "The global sleep market is projected to reach $950B by 2032."
+  # First draft (intentionally non-compliant): a medical claim + an uncited stat.
+  draft_bad: >-
+    Lumora is clinically proven to cure insomnia — 83% of people fall asleep
+    instantly, guaranteed.
+  # Revised draft: on-brand, non-medical, every factual sentence cited.
+  draft_good: >-
+    Redefine rest. In our interviews, 83% of people struggled to sleep [f1] — so
+    we built Lumora, a modular sleep system for darkness, temperature and sound.
+    The Essence mask starts at $99 [f3].

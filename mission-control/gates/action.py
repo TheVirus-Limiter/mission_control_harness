@@ -98,23 +98,26 @@ class RealXClient(XClient):
     def mode(self) -> str:
         return "live"
 
-    def post(self, run_id: str, payload: dict) -> dict:
-        # Lazy imports so the dependency is only needed for real posting.
-        import httpx  # noqa: F401
-
+    def _auth(self):
+        # OAuth 1.0a user context. requests + requests_oauthlib is the standard,
+        # correct pairing (httpx does not accept a requests-style auth object).
         try:
+            import requests  # noqa: F401
             from requests_oauthlib import OAuth1  # type: ignore
         except Exception as e:  # pragma: no cover - optional dep
             raise RuntimeError(
-                "Real posting needs OAuth1 signing (pip install requests-oauthlib)."
+                "Real posting needs OAuth1 signing (pip install requests requests-oauthlib)."
             ) from e
-
-        auth = OAuth1(
+        return OAuth1(
             self.creds["X_API_KEY"], self.creds["X_API_SECRET"],
             self.creds["X_ACCESS_TOKEN"], self.creds["X_ACCESS_TOKEN_SECRET"],
         )
-        resp = httpx.post("https://api.twitter.com/2/tweets", json=payload,
-                          auth=auth, timeout=15.0)
+
+    def post(self, run_id: str, payload: dict) -> dict:
+        import requests
+
+        resp = requests.post("https://api.twitter.com/2/tweets", json=payload,
+                             auth=self._auth(), timeout=15.0)
         resp.raise_for_status()
         data = resp.json().get("data", {})
         post_id = data.get("id", "unknown")
@@ -124,15 +127,10 @@ class RealXClient(XClient):
         return record
 
     def takedown(self, run_id: str, post_id: str) -> dict:  # pragma: no cover - network
-        import httpx
+        import requests
 
-        from requests_oauthlib import OAuth1  # type: ignore
-
-        auth = OAuth1(
-            self.creds["X_API_KEY"], self.creds["X_API_SECRET"],
-            self.creds["X_ACCESS_TOKEN"], self.creds["X_ACCESS_TOKEN_SECRET"],
-        )
-        resp = httpx.delete(f"https://api.twitter.com/2/tweets/{post_id}", auth=auth, timeout=15.0)
+        resp = requests.delete(f"https://api.twitter.com/2/tweets/{post_id}",
+                               auth=self._auth(), timeout=15.0)
         resp.raise_for_status()
         record = {"post_id": post_id, "mode": self.mode, "taken_down": True, "live": True}
         self.store.log(run_id, "action", "takedown", post_id, ok=True, detail=record)
@@ -157,16 +155,16 @@ def verify_x_credentials() -> dict:
                 "hint": ("POST /2/tweets needs OAuth1 user-context: the API key + secret AND "
                          "an Access Token + Secret with Read+Write. A Bearer Token cannot post.")}
     try:
-        import httpx
+        import requests
         from requests_oauthlib import OAuth1  # type: ignore
     except Exception:
         return {"ok": False, "reason": "missing_dependency",
-                "hint": "pip install requests-oauthlib httpx"}
+                "hint": "pip install requests requests-oauthlib"}
 
     auth = OAuth1(present["X_API_KEY"], present["X_API_SECRET"],
                   present["X_ACCESS_TOKEN"], present["X_ACCESS_TOKEN_SECRET"])
     try:
-        resp = httpx.get("https://api.twitter.com/2/users/me", auth=auth, timeout=15.0)
+        resp = requests.get("https://api.twitter.com/2/users/me", auth=auth, timeout=15.0)
     except Exception as e:  # pragma: no cover - network
         return {"ok": False, "reason": "network_error", "error": str(e)}
 

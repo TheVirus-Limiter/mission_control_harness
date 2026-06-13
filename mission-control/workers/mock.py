@@ -61,6 +61,11 @@ class MockResearcher(_SafeUnderProbe, Worker):
         if probe:
             return probe
         topic = task.get("topic", "our product")
+        # A mission may declare its own approved facts under `demo.facts:` so the
+        # no-key preview is brand-accurate. Otherwise fall back to the defaults.
+        demo = task.get("demo") or {}
+        if demo.get("facts"):
+            return {"topic": topic, "facts": dict(demo["facts"])}
         return {
             "topic": topic,
             "facts": {
@@ -81,10 +86,14 @@ class MockWriter(_SafeUnderProbe, Worker):
         if probe:
             return probe
 
+        # A mission may declare its own bad/good drafts under `demo:` so the
+        # no-key preview is brand-accurate. Otherwise use the defaults below.
+        demo = task.get("demo") or {}
         if feedback is None:
-            # BAD first draft: a banned phrase ("clinically proven", "guaranteed")
-            # AND an uncited statistic ("90%"). This fails banned_claims AND
-            # grounding on purpose.
+            # BAD first draft: a banned phrase + an uncited statistic. Fails
+            # banned_claims AND grounding on purpose.
+            if demo.get("draft_bad"):
+                return {"text": demo["draft_bad"]}
             return {
                 "text": (
                     "Meet FocusApp: it is clinically proven to cure procrastination. "
@@ -93,8 +102,9 @@ class MockWriter(_SafeUnderProbe, Worker):
             }
 
         # REVISED draft: strips banned phrases and cites every factual sentence
-        # against the approved facts. A real worker would parse `feedback`; the
-        # mock simply demonstrates the corrected output.
+        # against the approved facts.
+        if demo.get("draft_good"):
+            return {"text": demo["draft_good"]}
         return {
             "text": (
                 "Meet FocusApp, the calm way to get more done. "
