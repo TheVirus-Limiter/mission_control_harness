@@ -60,4 +60,5 @@ class TavilyResearcher(Worker):
         if not facts:
             ans = (data.get("answer") or "No results.").strip()
             facts["f1"] = ans[:240]
-        return {"topic": topic, "facts": facts, "sources": sources}
+        return {"topic": topic, "facts": facts, "sources": sources,
+                "query": query, "engine": "tavily"}

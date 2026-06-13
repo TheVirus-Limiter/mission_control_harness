@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 # Resolve default paths relative to this file so `python harness.py` works from
@@ -146,6 +148,7 @@ class Harness:
         self.proving_ground = ProvingGround(
             store, self.guardrails, policy=admission_cfg.get("policy", "all_survived"))
         self._certified: dict[str, bool] = {}  # worker.name -> certified (per run)
+        self._cert_lock = threading.Lock()     # guards _certified under parallel certify
         self.approver = approver or _cli_approver
 
     # -- worker assignment --------------------------------------------------
@@ -193,11 +196,13 @@ class Harness:
         that fails is refused (fatal -> halt). A JUDGE that fails is simply not
         seated on the jury (fatal=False -> returns False). Returns whether the
         agent is certified."""
-        cached = self._certified.get(worker.name)
+        with self._cert_lock:
+            cached = self._certified.get(worker.name)
         if cached is None:
             cert = self.proving_ground.certify(worker, run_id)
             cached = cert.certified
-            self._certified[worker.name] = cached
+            with self._cert_lock:
+                self._certified[worker.name] = cached
             if not cached:
                 failed = [a.attack for a in cert.failed]
                 alarm = Alarm(AlarmType.CERTIFICATION_FAILED,
@@ -297,6 +302,21 @@ class Harness:
         if "stated_total" in payload:
             accumulated["price"] = payload
 
+    def _flags_from(self, failed) -> list:
+        """Turn failed checks into highlightable spans for the UI."""
+        flags = []
+        for r in failed:
+            if r.name == "grounding":
+                for o in r.evidence.get("offenders", []):
+                    flags.append({"check": "grounding", "span": o.get("sentence", ""),
+                                  "reason": o.get("reason", "")})
+            elif r.name == "banned_claims":
+                for m in r.evidence.get("matches", []):
+                    flags.append({"check": "banned_claims", "span": m, "reason": "banned phrase"})
+            else:
+                flags.append({"check": r.name, "span": "", "reason": str(r.evidence)[:140]})
+        return flags
+
     def _feedback_from(self, failed) -> str:
         lines = ["Your previous output failed these checks. Fix every one and resubmit:"]
         for r in failed:
@@ -344,6 +364,15 @@ class Harness:
                                detail={"attempt": attempt, **res.evidence})
 
             failed = [r for r in results if not r.ok]
+
+            # OBSERVABILITY: record exactly what the model wrote this attempt and
+            # where (which spans) it got flagged, so the UI can show the draft
+            # evolution with the offending text highlighted.
+            if "text" in env.payload:
+                self.store.log(run_id, name, "draft", f"attempt-{attempt}", ok=(not failed),
+                               detail={"attempt": attempt, "worker": worker.name,
+                                       "text": env.payload["text"], "flags": self._flags_from(failed)})
+
             if not failed:
                 self.store.save_output(env)
                 self.store.log(run_id, name, "stage", "pass", ok=True,
@@ -375,9 +404,13 @@ class Harness:
     def run_rehearsal_stage(self, stage: dict, run_id: str, accumulated: dict) -> dict:
         name = stage["name"]
         self.store.log(run_id, name, "stage", "start", detail={"gate": "digital-twin + panel"})
-        # Judges are agents too: each runs the gauntlet. A judge that fails is
-        # NOT seated on the jury (the barrage is shown, untrusted models excluded).
-        judges = [j for j in self.build_judges() if self.ensure_certified(j, run_id, fatal=False)]
+        # Judges are agents too: each runs the gauntlet (in parallel). A judge
+        # that fails is NOT seated on the jury (the barrage is shown, untrusted
+        # models excluded).
+        roster = self.build_judges()
+        with ThreadPoolExecutor(max_workers=min(4, max(1, len(roster)))) as ex:
+            ok = list(ex.map(lambda j: self.ensure_certified(j, run_id, fatal=False), roster))
+        judges = [j for j, passed in zip(roster, ok) if passed]
         if not judges:
             raise HarnessHalt(Alarm(AlarmType.ESCALATE_HUMAN,
                                     "no judge survived Admission; the review panel cannot be seated",

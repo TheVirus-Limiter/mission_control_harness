@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import socket
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from alarms import Alarm, AlarmType
@@ -117,10 +118,22 @@ class Rehearsal:
                        detail={"payload": payload, "rendered": rendered,
                                "egress": "disabled", "byte_len": len(text)})
 
-        # 2 + 3) review every judge, auditing each verdict.
+        # 2 + 3) review every judge CONCURRENTLY, auditing each verdict. The
+        # judges are independent and I/O-bound, so the panel runs in ~one
+        # review's time regardless of how many judges are seated.
         verdicts: dict[str, dict] = {}
-        for judge in judges:
-            verdicts[judge.name] = self._review(judge, text, run_id)  # may escalate
+        escalation: Optional[RehearsalEscalation] = None
+        with ThreadPoolExecutor(max_workers=min(8, max(1, len(judges)))) as ex:
+            futs = {ex.submit(self._review, j, text, run_id): j for j in judges}
+            for fut, judge in futs.items():
+                try:
+                    verdicts[judge.name] = fut.result()
+                except RehearsalEscalation as e:  # a judge stayed broken
+                    escalation = escalation or e
+        if escalation:
+            raise escalation
+        # restore declared order for stable display
+        verdicts = {j.name: verdicts[j.name] for j in judges if j.name in verdicts}
 
         # 4) unanimous consent -- HELD if ANY judge flags ANY criterion.
         held = []

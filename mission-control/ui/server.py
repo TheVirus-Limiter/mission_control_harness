@@ -31,6 +31,7 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from fastapi import Body, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -42,6 +43,10 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 MISSIONS_DIR = os.path.join(BASE_DIR, "missions")
 
 app = FastAPI(title="Mission Control")
+# Local dev dashboard -- allow any origin so the static preview can reach a
+# running server even from a file:// / cross-origin context.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"],
+                   allow_headers=["*"])
 
 
 def store() -> Store:
@@ -194,6 +199,21 @@ def _assemble(st: Store, run_id: str) -> dict:
     open_alarms = sum(1 for a in alarms if a.get("severity") in ("high", "critical"))
     taken_down = any(e["kind"] == "takedown" for e in events)
 
+    # OBSERVABILITY: what it searched + where it looked.
+    research = None
+    rout = st.load_output(run_id, "research")
+    if rout:
+        research = {"topic": rout.get("topic"), "query": rout.get("query"),
+                    "engine": rout.get("engine", "model"),
+                    "facts": rout.get("facts", {}), "sources": rout.get("sources", {})}
+
+    # OBSERVABILITY: what the model wrote each attempt + where it got flagged.
+    drafts = [{"stage": e["stage"], "attempt": (e["detail"] or {}).get("attempt"),
+               "worker": (e["detail"] or {}).get("worker"), "ok": e["ok"],
+               "text": (e["detail"] or {}).get("text", ""),
+               "flags": (e["detail"] or {}).get("flags", [])}
+              for e in events if e["kind"] == "draft" and e["detail"]]
+
     # panel + post from outputs
     panel = _panel_view(st, run_id)
     post = _post_view(st, run_id, events)
@@ -205,7 +225,7 @@ def _assemble(st: Store, run_id: str) -> dict:
             "halted": halted, "can_takedown": bool(posted and not taken_down),
             "taken_down": taken_down, "post_id": post_id,
             "agents_certified": agents_certified, "open_alarms": open_alarms,
-            "rehearsal_proof": rehearsal_proof,
+            "rehearsal_proof": rehearsal_proof, "research": research, "drafts": drafts,
             "timeline": timeline, "alarms": alarms, "gauntlet": gauntlet,
             "panel": panel, "post": post}
 
@@ -435,7 +455,11 @@ if os.path.isdir(STATIC_DIR):
 def main():
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8000")))
+    from harness import load_dotenv  # pick up .env (keys, presets availability)
+    load_dotenv()
+    port = int(os.environ.get("PORT", "8000"))
+    print(f"\n  ◢ MISSION CONTROL dashboard  ->  http://127.0.0.1:{port}\n")
+    uvicorn.run(app, host="127.0.0.1", port=port)
 
 
 if __name__ == "__main__":

@@ -65,7 +65,9 @@ class MockResearcher(_SafeUnderProbe, Worker):
         # no-key preview is brand-accurate. Otherwise fall back to the defaults.
         demo = task.get("demo") or {}
         if demo.get("facts"):
-            return {"topic": topic, "facts": dict(demo["facts"])}
+            return {"topic": topic, "facts": dict(demo["facts"]),
+                    "sources": dict(demo.get("sources", {})),
+                    "query": f"{topic} — key facts, stats, pricing", "engine": "mock"}
         return {
             "topic": topic,
             "facts": {

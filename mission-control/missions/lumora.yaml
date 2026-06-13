@@ -20,7 +20,7 @@ input:
   handle: "@lumorasleep"
 
 budgets:
-  writer_revisions: 2
+  writer_revisions: 3
   reviewer_retries: 2
 
 admission:
@@ -75,6 +75,11 @@ demo:
     f2: "Respondents reported an average sleep score of 6 out of 10."
     f3: "The Essence sleep mask starts at $99 and the Max mask at $249."
     f4: "The global sleep market is projected to reach $950B by 2032."
+  sources:
+    f1: "https://uselumora.co/research"
+    f2: "https://uselumora.co/research"
+    f3: "https://uselumora.co/shop"
+    f4: "https://www.statista.com/sleep-economy"
   # First draft (intentionally non-compliant): a medical claim + an uncited stat.
   draft_bad: >-
     Lumora is clinically proven to cure insomnia — 83% of people fall asleep

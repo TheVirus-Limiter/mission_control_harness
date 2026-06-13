@@ -20,7 +20,8 @@ def _client(db):
 def test_presets_endpoint_lists_the_barrage(tmp_db):
     presets = _client(tmp_db).get("/api/presets").json()
     keys = {p["key"] for p in presets}
-    assert {"claude", "gpt", "llama33", "mixtral"} <= keys
+    assert {"claude", "gpt", "llama70", "mixtral"} <= keys
+    assert len(presets) >= 9  # a real barrage, not a token panel
     # every entry carries what the UI needs
     assert all({"key", "label", "vendor", "provider", "available"} <= set(p) for p in presets)
 

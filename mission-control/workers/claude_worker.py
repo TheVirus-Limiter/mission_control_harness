@@ -68,8 +68,28 @@ def parse_json_loose(raw: str) -> dict:
 # ---------------------------------------------------------------------------
 def _call_model(provider: str, model: str, base_url: Optional[str], env_key: str,
                 system: str, user: str) -> tuple[str, int]:
-    """Return (raw_text, tokens). Lazy-imports the SDK so the dependency is only
-    required when a real model is actually used."""
+    """Return (raw_text, tokens), with a small retry/backoff so a transient rate
+    limit or blip (likely when many judges run in parallel) does not cascade into
+    a false breach or a REVIEWER_FAULT."""
+    import time as _time
+
+    last = None
+    for attempt in range(3):
+        try:
+            return _call_once(provider, model, base_url, env_key, system, user)
+        except Exception as e:  # noqa: BLE001 -- transient transport errors
+            last = e
+            msg = str(e).lower()
+            transient = any(k in msg for k in ("429", "rate", "timeout", "timed out",
+                                               "overload", "503", "502", "connection"))
+            if attempt == 2 or not transient:
+                raise
+            _time.sleep(1.5 * (attempt + 1))
+    raise last  # pragma: no cover
+
+
+def _call_once(provider: str, model: str, base_url: Optional[str], env_key: str,
+               system: str, user: str) -> tuple[str, int]:
     if provider == "anthropic":
         import anthropic
 
