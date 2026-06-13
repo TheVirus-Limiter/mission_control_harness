@@ -614,7 +614,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--replay-from", default=None, help="resume a saved run from this stage")
     p.add_argument("--run", default=None, help="run id to replay")
     p.add_argument("--yes", action="store_true", help="auto-approve the human hold (non-interactive)")
+    p.add_argument("--verify-x", action="store_true",
+                   help="read-only check of your X credentials (GET /2/users/me; never posts)")
     args = p.parse_args(argv)
+
+    if args.verify_x:
+        from gates.action import verify_x_credentials
+
+        res = verify_x_credentials()
+        if res["ok"]:
+            console.print(f"[bold green]X credentials OK[/] — authenticated as "
+                          f"@{res['username']} ({res['name']}, id {res['id']})")
+            console.print("[dim]Identity confirmed. To actually post you still need the app set "
+                          "to Read+Write, DRY_RUN=0, and a human approval at Gate 3.[/]")
+            return 0
+        console.print(f"[bold red]X credential check failed[/] — {res.get('reason')}")
+        if res.get("missing"):
+            console.print(f"  missing: {res['missing']}")
+        if res.get("status"):
+            console.print(f"  HTTP {res['status']}: {res.get('body', '')}")
+        if res.get("hint"):
+            console.print(f"  [dim]{res['hint']}[/]")
+        return 1
 
     store = Store(args.db)
     approver = auto_approver if args.yes else _cli_approver

@@ -46,6 +46,31 @@ A real post to X happens **only** if all three hold: `DRY_RUN=0`, the X
 credentials are present, **and** a human approved at Gate 3. Otherwise the post
 is recorded in dry-run and rendered in the dashboard, never sent.
 
+### Posting to a real X account (optional)
+
+`POST /2/tweets` needs **OAuth 1.0a user context** — four keys. A *Bearer Token
+cannot post* (it is app-only/read-only).
+
+1. In the X developer portal → your app → **User authentication settings**, set
+   **App permissions = Read and write** and save.
+2. → **Keys and tokens** → under **Access Token and Secret**, click **Generate**
+   (do this *after* step 1, or the token won't carry write scope). You now have:
+   - Consumer Key → `X_API_KEY`
+   - Consumer Secret → `X_API_SECRET`
+   - Access Token → `X_ACCESS_TOKEN`
+   - Access Token Secret → `X_ACCESS_TOKEN_SECRET`
+3. `pip install requests-oauthlib` (for OAuth1 signing).
+4. Verify the keys without posting anything:
+   ```bash
+   python harness.py --verify-x        # GET /2/users/me, read-only
+   ```
+   It prints the authenticated `@handle` on success, or names exactly what's
+   missing/misconfigured.
+5. Only when you're ready to actually tweet: set `DRY_RUN=0` and run the
+   pipeline; approve at the human hold. (Keep `DRY_RUN=1` to preview the exact
+   payload in the dashboard first — the rehearsed bytes are identical to what
+   would be sent.)
+
 ## Running the harness (CLI)
 
 ```bash

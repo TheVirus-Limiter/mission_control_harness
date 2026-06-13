@@ -145,6 +145,42 @@ def _x_credentials() -> Optional[dict]:
     return creds if all(creds.values()) else None
 
 
+def verify_x_credentials() -> dict:
+    """READ-ONLY check of the OAuth 1.0a user-context credentials. Calls
+    GET /2/users/me -- it never posts. Returns a structured result so the CLI can
+    tell the user exactly what is wrong (missing keys vs. wrong permission)."""
+    keys = ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"]
+    present = {k: os.environ.get(k, "") for k in keys}
+    missing = [k for k, v in present.items() if not v]
+    if missing:
+        return {"ok": False, "reason": "missing_credentials", "missing": missing,
+                "hint": ("POST /2/tweets needs OAuth1 user-context: the API key + secret AND "
+                         "an Access Token + Secret with Read+Write. A Bearer Token cannot post.")}
+    try:
+        import httpx
+        from requests_oauthlib import OAuth1  # type: ignore
+    except Exception:
+        return {"ok": False, "reason": "missing_dependency",
+                "hint": "pip install requests-oauthlib httpx"}
+
+    auth = OAuth1(present["X_API_KEY"], present["X_API_SECRET"],
+                  present["X_ACCESS_TOKEN"], present["X_ACCESS_TOKEN_SECRET"])
+    try:
+        resp = httpx.get("https://api.twitter.com/2/users/me", auth=auth, timeout=15.0)
+    except Exception as e:  # pragma: no cover - network
+        return {"ok": False, "reason": "network_error", "error": str(e)}
+
+    if resp.status_code == 200:
+        data = resp.json().get("data", {})
+        return {"ok": True, "username": data.get("username"),
+                "name": data.get("name"), "id": data.get("id")}
+    return {"ok": False, "reason": "auth_failed", "status": resp.status_code,
+            "body": resp.text[:300],
+            "hint": ("401/403 usually means the Access Token lacks WRITE scope or was generated "
+                     "BEFORE you set the app to Read+Write. Set Read+Write, then regenerate the "
+                     "Access Token & Secret.")}
+
+
 def select_client(store) -> XClient:
     """DRY_RUN unless EVERY safety condition for a real post is met."""
     dry_run = os.environ.get("DRY_RUN", "1").strip().lower() not in ("0", "false", "no")

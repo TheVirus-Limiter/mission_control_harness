@@ -187,6 +187,21 @@ def test_dry_run_is_default(tmp_db, monkeypatch):
     store.close()
 
 
+def test_verify_x_reports_missing_credentials(monkeypatch):
+    """The read-only credential check names exactly what is missing and never
+    touches the network when keys are absent."""
+    from gates.action import verify_x_credentials
+
+    for k in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"):
+        monkeypatch.delenv(k, raising=False)
+    # Consumer key + secret present, but no Access Token yet (the user's case).
+    monkeypatch.setenv("X_API_KEY", "ck")
+    monkeypatch.setenv("X_API_SECRET", "cs")
+    res = verify_x_credentials()
+    assert res["ok"] is False and res["reason"] == "missing_credentials"
+    assert res["missing"] == ["X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"]
+
+
 def test_real_post_blocked_without_all_conditions(tmp_db, monkeypatch):
     # DRY_RUN off but NO credentials -> still dry-run (fail safe).
     monkeypatch.setenv("DRY_RUN", "0")
