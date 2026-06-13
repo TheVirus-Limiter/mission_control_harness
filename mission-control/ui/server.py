@@ -810,6 +810,7 @@ def api_reject(run_id: str, body: dict = Body(default={})):
     preset = body.get("preset") or None
     scenario = body.get("scenario") or "normal"
     real = bool(body.get("real")) or bool(preset)
+    human_gate = bool(body.get("human_gate"))
     flags = {"reject_demo": scenario == "reject", "block_demo": scenario == "block",
              "faulty_grader": scenario == "faulty", "full_panel": scenario == "full"}
     new_id = uuid.uuid4().hex[:8]
@@ -818,9 +819,10 @@ def api_reject(run_id: str, body: dict = Body(default={})):
         from harness import Harness, auto_approver
 
         os.environ["DRY_RUN"] = "1"
+        approver = _defer_approver if human_gate else auto_approver
         st2 = Store(DB_PATH)
         try:
-            Harness(mission_path, st2, real=real, preset=preset, approver=auto_approver,
+            Harness(mission_path, st2, real=real, preset=preset, approver=approver,
                     human_feedback=correction, **flags).run(run_id=new_id)
         except Exception as e:
             try:

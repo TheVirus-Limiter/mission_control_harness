@@ -501,7 +501,7 @@ function startAuto(sec,fn,btnSel,label){
 }
 
 /* ===== phase router ===== */
-function setPhase(p){cancelAuto();cancelGauntlet();phase=p;renderStepper();render();advance();}
+function setPhase(p){cancelAuto();cancelGauntlet();phase=p;renderStepper();render();advance();if(p==='select')refreshSession();}
 function render(){
   renderStepper();setAgentChip();
   const fns={select:renderSelect,gauntlet:renderGauntlet,write:renderWrite,rehearsal:renderRehearsal,approval:renderApproval};
@@ -521,26 +521,28 @@ function advance(){
 }
 
 /* ===== poll ===== */
+async function refreshSession(){try{session=await J('/api/attack-stats');if(phase==='select')renderSelect();}catch(e){}}
 async function tick(){
   if(!runId)return;
   try{
     view=await J('/api/runs/'+runId);
     pushConsole(view.timeline||[]);dockCost();
-    try{session=await J('/api/attack-stats');}catch(e){}
     advance();
   }catch(e){/* transient */}
 }
 
 /* ===== launch ===== */
-async function launch(){
-  cancelAuto();played.clear();seenSeq.clear();t0=null;failAt=null;critiques=[];
-  $('#dockBody').innerHTML='<div class="empty-log cur">launching… </div>';
+function runParams(){
   const sketchy=sel.model==='sketchy';
   const picked=sketchy?null:presets.find(p=>p.key===sel.model);
   const realOK=!!(picked&&picked.available);
   const scenario=sketchy?'reject':(sel.inject==='held'?'block':sel.inject==='faulty'?'faulty':'full');
-  const body={mission:sel.mission, preset:realOK?sel.model:null, scenario, human_gate:sel.human};
-  const r=await J('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  return {mission:sel.mission, preset:realOK?sel.model:null, scenario, human_gate:sel.human};
+}
+async function launch(){
+  cancelAuto();played.clear();seenSeq.clear();t0=null;failAt=null;critiques=[];
+  $('#dockBody').innerHTML='<div class="empty-log cur">launching… </div>';
+  const r=await J('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(runParams())});
   runId=r.run_id;
   setPhase('gauntlet');
   if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(tick,1200);tick();
@@ -924,8 +926,12 @@ async function scanReplies(judges,done){
 }
 
 /* ===== APPROVAL (functional) ===== */
-function renderApproval(){$('#stage').innerHTML=`<div class="wrap" style="max-width:680px"><h1 style="font-size:24px;color:var(--ink-bright);font-family:var(--sans);font-weight:600">Final approval</h1><p class="sub">awaiting…</p></div>`;}
-function playApproval(){
+function renderApproval(){
+  if(aReady())return approvalContent();
+  $('#stage').innerHTML=`<div class="wrap" style="max-width:680px"><h1 style="font-size:24px;color:var(--ink-bright);font-family:var(--sans);font-weight:600">Final approval</h1><p class="sub">awaiting the rehearsal verdict…</p></div>`;
+}
+function playApproval(){approvalContent();}
+function approvalContent(){
   const post=view.post||{};const panel=view.panel||{};
   const eligible=panel.eligible;const judges=panel.judges||[];
   const approves=judges.filter(j=>j.pass).length;
@@ -954,13 +960,19 @@ function playApproval(){
     <h1 style="font-size:24px;color:var(--ink-bright);font-weight:600;margin:0">Final approval</h1>
     <p class="sub">Nothing reaches X without a recorded human decision.</p>
     <div style="font-family:var(--mono);font-size:12px;color:${verdictColor};margin-top:8px">● ${eligible?'UNANIMOUS CONSENT · publish-eligible':'HELD'}</div>
-    ${payload}${action}</div>`;
+    ${payload}${critiqueMemory()}${action}</div>`;
   wireApproval();
+}
+function critiqueMemory(){
+  if(!critiques.length)return '';
+  return `<div class="glass" style="margin:12px 0;border-color:rgba(111,208,239,.3)">
+    <div class="field-lbl" style="margin:0 0 8px">📝 critique memory — sent back to the writer</div>
+    ${critiques.map((c,i)=>`<div style="font-family:var(--mono);font-size:12px;color:var(--dim);padding:3px 0">${i+1}. ${esc(c)}</div>`).join('')}</div>`;
 }
 function postedCard(){
   const post=view.post||{};
   return `<div class="glass" style="border-color:rgba(53,255,158,.4)">
-    <div style="color:var(--go);font-weight:600">● Posted · dry run</div>
+    <div style="color:var(--go);font-weight:600">● Posted · dry run${!sel.human?' · <span style="font-family:var(--mono);font-size:11px;color:var(--cyan)">AUTO-APPROVED (human gate off)</span>':''}</div>
     <p class="sub" style="margin:6px 0">Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.</p>
     <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep/status/${esc(post.post_id||'0')}" target="_blank">🔗 x.com/lumorasleep/status/${esc(post.post_id||'0')} (dry-run)</a>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -983,7 +995,7 @@ function wireApproval(){
       const save=$('#save').checked;
       if(save&&!confirm('Save as a STANDING guardrail for this mission? Every future run will follow it (rulebook edit, not training).'))return;
       const lb=$('#logback');lb.disabled=true;lb.textContent='re-running…';
-      const j=await J('/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correction:t,save})});
+      const j=await J('/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...runParams(),correction:t,save})});
       if(!j||!j.ok){lb.disabled=false;lb.textContent='Log & send back';alert((j&&j.reason)||'failed');return;}
       critiques.push(t);runId=j.run_id;played.clear();seenSeq.clear();t0=null;failAt=null;setPhase('write');tick();};
   };
@@ -1002,7 +1014,7 @@ window.MC={get gState(){return gState;},gauntletWin,gauntletBreach,setPhase,get 
 /* ===== boot ===== */
 async function boot(){
   try{presets=await J('/api/presets');}catch(e){presets=[];}
-  try{session=await J('/api/attack-stats');}catch(e){}
+  await refreshSession();
   setPhase('select');
 }
 boot();
