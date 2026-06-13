@@ -255,6 +255,16 @@ class HumanDeclined(Exception):
         self.alarm = alarm
 
 
+class DeferApproval(Exception):
+    """Raised by a dashboard human-gate approver to PARK a run at the Action hold.
+
+    The post is staged and ``AWAITING_HUMAN`` is already logged, but the approver
+    declines to decide *now* -- a human will resolve it later via the dashboard's
+    /api/approve or /api/reject. The engine catches this and stops cleanly: it is
+    NOT a decline and NOT a failure, so the run reads as 'awaiting human', not
+    halted. Nothing is posted until the human acts."""
+
+
 class ActionGate:
     def __init__(self, store, guardrails, approver: Approver, handle: str = "@yourbrand"):
         self.store = store

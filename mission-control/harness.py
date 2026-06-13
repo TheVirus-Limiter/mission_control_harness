@@ -63,7 +63,7 @@ from checkpoints import CONTENT_CHECK_ALARM, REGISTRY, STAGE_SCHEMAS
 from guardrails import Guardrails
 from materials import Envelope, Store
 from gates.admission import ProvingGround
-from gates.action import ActionGate, HumanDeclined, render_post, to_channel
+from gates.action import ActionGate, DeferApproval, HumanDeclined, render_post, to_channel
 from gates.rehearsal import Rehearsal, RehearsalEscalation
 from workers.base import Worker
 from workers.mock import (FaultyReviewer, HeldReviewer, MOCK_WORKERS, MedicalClaimWriter,
@@ -530,6 +530,12 @@ class Harness:
         gate = ActionGate(self.store, self.guardrails, approver=self.approver, handle=self.handle)
         try:
             record = gate.run(run_id, text)
+        except DeferApproval:
+            # Human gate: the post is staged and AWAITING_HUMAN is already logged.
+            # Park the run here -- no post, no approval, no escalate -- so the
+            # dashboard can resolve it later via /api/approve or /api/reject. The
+            # run still completes normally; it reads as 'awaiting human'.
+            return None
         except HumanDeclined as e:
             raise HarnessHalt(e.alarm)
         except Exception as e:  # e.g. a real X API failure -> structured + fail closed
