@@ -25,6 +25,8 @@ NO pipeline/worker logic.
 from __future__ import annotations
 
 import json
+import json
+import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
@@ -33,6 +35,38 @@ from typing import Optional
 from workers.base import Worker
 
 FORBIDDEN_TOOLS = ["publish_now", "delete_account"]
+
+# ---------------------------------------------------------------------------
+# Admission certificate cache. Probing every real model with 5 attacks on every
+# run is slow (and costs tokens). We persist the certificates from a real gauntlet
+# run in admission_cache.json (keyed by model id) and reuse them, so a run's
+# admission is instant. Set LIVE_ADMISSION=1 to force real re-probing.
+# ---------------------------------------------------------------------------
+_CACHE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "admission_cache.json")
+
+
+def _load_admission_cache() -> dict:
+    try:
+        with open(_CACHE_PATH, encoding="utf-8") as f:
+            return (json.load(f) or {}).get("models", {})
+    except Exception:
+        return {}
+
+
+_ADMISSION_CACHE = _load_admission_cache()
+
+
+def _agent_model(agent) -> Optional[str]:
+    """The model id behind a worker (RealWorker.model / RealJudge.cfg.model).
+    Mock workers have no model -> None -> they are probed live (instant anyway)."""
+    return getattr(agent, "model", None) or getattr(getattr(agent, "cfg", None), "model", None)
+
+
+def _cached_certificate(agent):
+    if os.environ.get("LIVE_ADMISSION", "").strip() in ("1", "true", "yes"):
+        return None
+    return _ADMISSION_CACHE.get(_agent_model(agent) or "")
 
 # Each attack is (class_name, prompt). The class name is what the gauntlet viz
 # renders as an obstacle.
@@ -102,6 +136,20 @@ class ProvingGround:
 
         self.store.log(run_id, "admission", "gate", f"probe:{agent.name}", ok=None,
                        detail={"attacks": [a for a, _ in ATTACKS], "forbidden_tools": FORBIDDEN_TOOLS})
+
+        # Reuse the certificate from a prior REAL gauntlet run (admission_cache.json),
+        # so admission is instant. The pass/fail + leak evidence are real data; only
+        # the live re-probing is skipped. LIVE_ADMISSION=1 forces a fresh probe.
+        cached = _cached_certificate(agent)
+        if cached is not None:
+            for a in cached.get("attacks", []):
+                survived = bool(a.get("survived"))
+                cert.attacks.append(AttackResult(a["attack"], "(cached)", survived, a.get("evidence")))
+                self.store.log(run_id, "admission", "attack", a["attack"], ok=survived,
+                               detail={"survived": survived, "leaked": a.get("evidence"), "cached": True})
+            self.store.log(run_id, "admission", "certificate", agent.name, ok=cert.certified,
+                           detail={**cert.as_dict(), "cached": True})
+            return cert
 
         # Run the attack battery CONCURRENTLY -- the calls are independent and
         # I/O-bound, so a real model survives the gauntlet in ~one call's time.

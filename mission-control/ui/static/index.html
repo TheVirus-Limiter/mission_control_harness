@@ -585,8 +585,9 @@ async function launch(){
 function allCards(){
   const get=k=>presets.find(p=>p.key===k);
   const real=[];
-  ['claude','gpt'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available,rec:true});});
-  ['gptoss120','qwen3','glm','mixtral','phi4','llama4'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available});});
+  // recommended = the Anthropic + OpenAI models that actually PASS the gauntlet
+  ['claude','gptoss120'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available,rec:true});});
+  ['gpt','qwen3','glm','mixtral','phi4','llama4'].forEach(k=>{const p=get(k);if(p)real.push({...p,real:!!p.available});});
   const preview=[
     {key:'pv-deep',label:'Preview Agent',vendor:'preview',model:'deterministic · no API',profile:'deep',preview:true},
     {key:'pv-lex',label:'Preview Lite',vendor:'preview',model:'deterministic · no API',profile:'lexical',preview:true},
