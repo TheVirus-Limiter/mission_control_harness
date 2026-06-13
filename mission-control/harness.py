@@ -171,6 +171,9 @@ class Harness:
             "audience": self.input.get("audience"),
             "facts": accumulated.get("facts", {}),
             "rubric": self.mission.get("rubric_criteria", []),
+            # declared policy handed to the writer as part of its brief (the
+            # harness still enforces it independently at the checkpoint).
+            "banned_claims": self.guardrails.banned_claims,
         }
         return task
 
