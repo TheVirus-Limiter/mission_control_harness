@@ -511,7 +511,7 @@ function render(){
 /* ===== readiness gates ===== */
 const gReady=()=>view&&view.gauntlet&&view.gauntlet.length>0;
 const wReady=()=>view&&view.drafts&&view.drafts.length>0;
-const rReady=()=>view&&view.panel&&view.panel.present;
+const rReady=()=>view&&((view.panel&&view.panel.present)||(view.halted&&(view.alarms||[]).some(a=>['REVIEWER_FAULT','ESCALATE_HUMAN'].includes(a.type))));
 const aReady=()=>view&&(view.awaiting||view.posted||view.halted);
 function advance(){
   if(phase==='gauntlet'&&!played.has('gauntlet')&&gReady()){played.add('gauntlet');playGauntlet();}

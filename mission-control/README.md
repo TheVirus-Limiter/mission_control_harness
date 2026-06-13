@@ -96,29 +96,35 @@ everything to `mission.db` (SQLite).
 uvicorn ui.server:app --reload          # then open http://127.0.0.1:8000
 ```
 
-A cinematic mission-console over the same `mission.db`, with a **launch bar**
-(pick a mission, an agent/model preset, and a scenario, then ▶ RUN — dashboard
-launches are always dry-run) and four panels:
+A single full-viewport **guided pipeline** — a Matrix/phosphor mission-control
+terminal — that walks one run through the five gates as a cinematic over real,
+persisted data. A persistent telemetry console streams the flight log across every
+phase, and the lifecycle stepper (`PICK › GAUNTLET › WRITE › REHEARSAL › APPROVE`)
+turns **red at the gate that fails**.
 
-1. **Pipeline** — a movie-style flight console: stage-flow LEDs
-   (research→write→rehearsal→action) over a live CRT event log with telemetry.
-2. **Proving Ground** — an animated obstacle course: the AI avatar runs · swims ·
-   cycles · climbs · vaults one segment per real attack class, **trips on a real
-   canary leak** (actual leaked output shown) and earns a 🥇 only if it survives.
-3. **Broadcast** — a fake-X interface: the post as it would appear, then the
-   judge bots reply in real time with human-style comments and a ✓ approve / ✗
-   hold mark. No fake likes, no scores, no averages.
-4. **Alarms** — severity-colored cards with type, context, and recommended action.
+1. **PICK** — choose the model that will research, write and ship the post (the
+   diverse six + a deliberately-untrusted SketchyAgent), the topic, an optional
+   demo inject (medical claim / faulty judge), and whether a human approves first.
+2. **GAUNTLET** — a pixel-arcade admission game: the model runs a 5-event athletics
+   course, one event per **real attack class**; it earns a gold **Certificate of
+   Trust**, or **trips on a real canary leak** (actual leaked output shown) → GAME
+   OVER → REFUSED.
+3. **WRITE** — observability *is* the view: what it searched (`[f#]` sources) and
+   what it wrote, with flagged spans highlighted and the fail→revise→pass beat shown
+   as a word-level **diff**.
+4. **REHEARSAL** — the stage becomes a true-to-life **X (Twitter) client**: the
+   post (citations stripped), the review panel as replies (tier chips, criteria
+   chips, PASS/HELD), an auto-scan tally, and on a hold a giant **HELD** stamp over
+   the tweet — it never reaches X.
+5. **APPROVE** — the human gate: nothing posts without a recorded decision.
+   **Pass & post** ships a dry-run (with a takedown armed + audit-report export);
+   **Fail & revise** logs a correction to a critique memory, feeds it to the writer
+   on a re-run, and — *only if explicitly confirmed* — saves it as a declared
+   standing guardrail (`<mission>.learned.json`). Not training; a rulebook edit.
 
-Across the deck: a **cost/latency meter** and a session-wide **attacks-survived**
-scoreboard (both pure reads of persisted telemetry), a **revision diff** showing
-the fail→revise→pass beat word-by-word, a one-click **audit report** export
-(`/api/runs/{id}/report` JSON + a printable `report.html`), and — when a reviewer
-holds a post — a **correction box** that feeds the writer on the next attempt and,
-*only if explicitly confirmed*, saves the note as a declared standing guardrail
-(`<mission>.learned.json`). None of that is model training; it edits the rulebook.
-
-Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
+A cost/latency readout and a session-wide attacks-survived scoreboard ride along
+(pure reads of persisted telemetry). Point the dashboard at a specific store with
+`MISSION_DB=/path/to/mission.db`.
 
 ## Tests
 
