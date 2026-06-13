@@ -1,12 +1,14 @@
-pydantic>=2.6
-pyyaml>=6.0
-rich>=13.7
-fastapi>=0.110
-uvicorn>=0.29
-httpx>=0.27
-anthropic>=0.40
-openai>=1.40
-pytest>=8.0
-# Only needed for REAL posting to X (OAuth1 signing). Dry-run never imports it.
-requests>=2.31
-requests-oauthlib>=1.3
+# Direct dependencies, pinned to the tested versions for reproducible deploys.
+# (requirements.lock has the full transitive snapshot from the dev environment.)
+pydantic>=2.6,<3
+pyyaml>=6.0,<7
+rich>=13.7,<16
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+httpx>=0.27,<0.28          # starlette TestClient needs httpx<0.28
+anthropic>=0.40,<1
+openai>=1.40,<3
+pytest>=8.0,<10
+# Needed for REAL posting to X (OAuth1 signing). Dry-run never imports them.
+requests>=2.31,<3
+requests-oauthlib>=1.3,<3

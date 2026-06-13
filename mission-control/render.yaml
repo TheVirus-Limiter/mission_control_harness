@@ -8,10 +8,15 @@ services:
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn ui.server:app --host 0.0.0.0 --port $PORT"
     envVars:
-      # Posting stays safe in the cloud: dry-run, no keys required.
+      # Pin the Python version for a reproducible build.
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # Posting stays SAFE in the cloud: dry-run, no keys required. Even if you
+      # later add keys, the dashboard launch path is non-interactive -> dry-run.
       - key: DRY_RUN
         value: "1"
-      # Optional: provide a prebuilt mission.db, or generate runs via the CLI.
+      # The dashboard reads/writes this SQLite file (ephemeral on free plans;
+      # click RUN MISSION in the UI to generate runs in the cloud).
       - key: MISSION_DB
         value: "mission.db"
     plan: free

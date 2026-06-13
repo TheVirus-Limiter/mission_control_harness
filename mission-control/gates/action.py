@@ -18,6 +18,8 @@ This file holds posting/transport logic only -- no content generation.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import os
 import re
@@ -29,6 +31,22 @@ from alarms import Alarm, AlarmType
 
 # X API v2 limit. Declared here, enforced when the payload is built.
 TWEET_LIMIT = 280
+
+# A belt-and-suspenders guard: while the Rehearsal stage runs (the digital twin
+# is meant to be OFFLINE), a real outbound post must be impossible. This contextvar
+# is per-thread, so concurrent runs are isolated; RealXClient.post checks it.
+_rehearsal_active: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "rehearsal_active", default=False)
+
+
+@contextlib.contextmanager
+def rehearsal_active():
+    """Mark that we are inside the Rehearsal stage; a real post raises if reached."""
+    tok = _rehearsal_active.set(True)
+    try:
+        yield
+    finally:
+        _rehearsal_active.reset(tok)
 
 
 def build_x_payload(text: str) -> dict:
@@ -129,6 +147,10 @@ class RealXClient(XClient):
         )
 
     def post(self, run_id: str, payload: dict) -> dict:
+        # A real post must NEVER originate from inside the Rehearsal stage.
+        if _rehearsal_active.get():
+            raise RuntimeError("BLOCKED: a real X post was attempted from inside the "
+                               "Rehearsal stage (the digital twin is offline-only)")
         import requests
 
         resp = requests.post("https://api.twitter.com/2/tweets", json=payload,

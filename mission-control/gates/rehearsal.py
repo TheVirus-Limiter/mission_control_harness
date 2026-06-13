@@ -30,7 +30,7 @@ from alarms import Alarm, AlarmType
 from checkpoints import meta_check
 from materials import Envelope
 from models.judges import tier_rank
-from gates.action import build_x_payload, render_post
+from gates.action import build_x_payload, render_post, rehearsal_active
 
 
 class RehearsalEscalation(Exception):
@@ -125,7 +125,18 @@ class Rehearsal:
 
     # -- the gate -----------------------------------------------------------
     def run(self, run_id: str, text: str, judges: list) -> dict:
-        # 1) digital twin: byte-identical payload, built with egress disabled.
+        with rehearsal_active():  # a real post is impossible for the duration
+            return self._run(run_id, text, judges)
+
+    def _run(self, run_id: str, text: str, judges: list) -> dict:
+        # 1) Digital twin: the byte-identical payload that Gate 3 WOULD send is
+        #    built here with network egress disabled.
+        #    BOUNDARY (be honest): network_disabled() is a PROOF-OF-CONSTRUCTION
+        #    that the outbound payload can be built and inspected entirely offline
+        #    -- it is NOT a network jail around the judge LLM calls (those run
+        #    after this block and DO use the network in --real mode). The hard
+        #    guarantee that no real *post* can leave from rehearsal is the
+        #    rehearsal_active() guard above (see RealXClient.post), not this block.
         with network_disabled():
             payload = build_x_payload(text)
             rendered = render_post(payload, author=self.handle)

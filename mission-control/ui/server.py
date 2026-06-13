@@ -262,8 +262,17 @@ def _panel_view(st: Store, run_id: str) -> dict:
                            "comment": comment or "Looks good to me — clear and on-brand.",
                            "criteria": verdict.get("criteria", {}),
                            "profile": profiles.get(name, "deep"), "covers": assigned.get(name, [])})
+    # For the blocked-post CLIMAX: the exact offending sentence each judge cited,
+    # so the frozen post can highlight the lie inline.
+    verdicts = out.get("verdicts", {})
+    held_spans = []
+    for h in out.get("held", []):
+        span = (verdicts.get(h["judge"], {}).get("citations", {}) or {}).get(h["criterion"], "")
+        held_spans.append({"criterion": h["criterion"], "judge": h["judge"],
+                           "tier": h.get("tier", "deep"), "reason": h.get("reason", ""),
+                           "span": span})
     return {"present": True, "eligible": out.get("eligible"),
-            "judges": judges, "held": out.get("held", []),
+            "judges": judges, "held": out.get("held", []), "held_spans": held_spans,
             "rubric": out.get("rubric", []), "criteria_outcomes": out.get("criteria_outcomes", {})}
 
 

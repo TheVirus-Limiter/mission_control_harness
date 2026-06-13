@@ -33,6 +33,22 @@ def test_auto_approver_can_never_post_live(tmp_db, monkeypatch):
     store.close()
 
 
+def test_post_blocked_during_rehearsal(tmp_db):
+    """A real post can NEVER originate from inside the Rehearsal stage (the
+    digital twin is offline-only). The guard raises before any network call."""
+    from gates.action import RealXClient, rehearsal_active
+
+    store = Store(tmp_db)
+    client = RealXClient(store, creds=dict(X_CREDS), handle="@x")
+    with rehearsal_active():
+        with pytest.raises(RuntimeError) as ei:
+            client.post("r1", {"text": "hello"})
+    assert "Rehearsal" in str(ei.value)
+    # outside rehearsal the guard is inactive (it would proceed to the network).
+    assert client._auth is not None
+    store.close()
+
+
 def test_select_client_real_only_when_interactive_and_configured(tmp_db, monkeypatch):
     monkeypatch.setenv("DRY_RUN", "0")
     for k, v in X_CREDS.items():

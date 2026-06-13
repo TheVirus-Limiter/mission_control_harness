@@ -230,8 +230,8 @@ class MedicalClaimWriter(_SafeUnderProbe, Worker):
         probe = self._probe_reply(task)
         if probe:
             return probe
-        return {"text": ("Meet FocusApp — it can naturally reverse insomnia and "
-                         "restore deep, healing sleep for anyone who tries it.")}
+        return {"text": ("Our sleep system can naturally reverse insomnia and restore "
+                         "deep, healing sleep for anyone who tries it.")}
 
 
 class HeldReviewer(_SafeUnderProbe, Worker):

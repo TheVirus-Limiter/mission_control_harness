@@ -199,7 +199,16 @@ class Harness:
         """Run the Admission gauntlet (once per worker per run). A PIPELINE agent
         that fails is refused (fatal -> halt). A JUDGE that fails is simply not
         seated on the jury (fatal=False -> returns False). Returns whether the
-        agent is certified."""
+        agent is certified.
+
+        LIMITATION (documented, acceptable for scope): the certificate cache is
+        keyed by `worker.name`, not a stable object identity. This is safe here
+        because the HARNESS builds every worker itself from declared config
+        (missions + models/judges.py) -- nothing untrusted injects a same-named
+        worker -- and the cache is per-run (a fresh dict per Harness instance). So
+        a name collision could only reuse a certificate WITHIN one run among
+        workers the harness itself constructed. If workers were ever accepted from
+        an untrusted caller, this should key on object identity instead."""
         with self._cert_lock:
             cached = self._certified.get(worker.name)
         if cached is None:

@@ -1,0 +1,39 @@
+P0-P3 feedback: deploy-ready, egress guard, lockfile, blocked-post climax, lifecycle rail
+
+P0 (deploy + real verification):
+- render.yaml: pin PYTHON_VERSION=3.12.7; README has exact GitHub+Render steps.
+  Verified a fresh empty-DB cold start serves the dashboard and POST /api/launch
+  reaches a dry-run post (so a clean Render deploy + RUN MISSION works in cloud).
+- verify_real.py: runs ONE real --preset pipeline + panel (dry-run) and prints
+  whether the real multi-vendor panel reached UNANIMOUS CONSENT or HELD, with
+  honest demo-stable knobs. Confirmed live: Tavily+Claude certified, GLM/GPT-OSS-
+  120B/Qwen3 seated (Mixtral leaked, refused), consent reached, posted (136s).
+
+P1 (correctness + honesty):
+- Egress boundary stated explicitly in HARNESS.md AND in a code comment: it is a
+  proof-of-construction, not a network jail around the judge calls. Added a real
+  guard -- the whole Rehearsal gate runs inside rehearsal_active() and
+  RealXClient.post() RAISES if reached during rehearsal (+ test).
+- Admission cert cache keyed by name documented (code comment + HARNESS.md) as
+  acceptable for scope (harness builds all workers from declared config, per-run).
+- requirements.txt pinned to bounded ranges; requirements.lock added (pip freeze).
+
+P2 (demo lands):
+- Blocked-post CLIMAX: when HELD, the post is frozen, stamped HELD in amber, and
+  the offending sentence is highlighted INLINE in the rendered post (projector-
+  clear). server surfaces held_spans (the cited offending sentence per judge).
+- Persistent ADMISSION -> REHEARSAL -> ACTION lifecycle rail on every tab (lit /
+  checked / amber-on-halt) -- "trust is a lifecycle" made literally visible.
+- Mission timeline streams new rows in as they arrive (and on first view).
+- No key fact is hover-only (reasons/verdicts/tiers/GO-NO-GO shown by default).
+
+P3 (verification):
+- Six panel models re-verified alive (6 distinct lineages, no swaps).
+- test_demo_paths.py LOCKS the three headline paths: clean->dry-run post,
+  --block-demo holds+never posts, --reject-demo refuses at admission+halts.
+- Deep judges set to 'normal', strict posture only on the lexical judge (honest +
+  demo-stable so real runs converge instead of needlessly holding).
+
+73 tests green. (No new worker types / live multi-platform -- out of scope per request.)
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

@@ -106,8 +106,15 @@ Before a post touches the world it is rehearsed:
 
 * the **byte-identical** outbound payload is built with the *same*
   `build_x_payload()` that Gate 3 would send — inside a **network-egress-disabled
-  sandbox** (`network_disabled()` blocks `socket`), proving the payload is
-  constructed and inspected without any possibility of being sent;
+  sandbox** (`network_disabled()` blocks `socket`).
+  **Be precise about the boundary (this is the gap a sharp reviewer looks for):**
+  `network_disabled()` is a **proof-of-construction** that the outbound payload
+  can be built and inspected *entirely offline*. It is **not** a network jail
+  around the judge LLM calls — those run *after* that block and do use the network
+  in `--real` mode. The hard guarantee that *no real post can leave from
+  Rehearsal* is a separate, explicit guard: the whole Rehearsal gate runs inside
+  `rehearsal_active()`, and `RealXClient.post()` **raises** if it is ever reached
+  while that flag is set (tested by `test_post_blocked_during_rehearsal`);
 * a **multi-model panel** (declared in `models/judges.py`: Anthropic + OpenAI +
   a whole **NVIDIA NIM catalog** — DeepSeek, Mistral/Mixtral, Qwen, Gemma, Phi,
   Llama, Nemotron — plus optional local Ollama judges, each at a declared
@@ -264,7 +271,7 @@ same db file, and confirms `research` and `write` are reused, not recomputed.
 | 7 | swappability (mission + judge model) | `test_swappability`, `test_m2_real` |
 | 8 | safe by default (dry-run, no real post) | `test_dry_run_is_default` |
 
-Run `pytest -q` — 59 tests, all green.
+Run `pytest -q` — 73 tests, all green.
 
 ---
 
@@ -287,3 +294,18 @@ A multi-agent review drove a round of safety/correctness hardening:
   timeouts; `MAX_JUDGES` defaults to a sane cap; real X HTTP errors become
   structured alarms; the store uses WAL + locked reads; replay reuses only
   stages with a recorded pass.
+
+### Stated limitations (honesty)
+
+* **Rehearsal egress** is a *proof-of-construction* that the payload builds
+  offline, not a network jail around the judge LLM calls (§3, Gate 2). The hard
+  no-post guarantee is the `rehearsal_active()` guard on `RealXClient.post`.
+* **Admission certificate cache** is keyed by `worker.name`, not object identity.
+  Acceptable because the harness builds every worker from declared config and the
+  cache is per-run; a name collision could only reuse a certificate among workers
+  the harness itself constructed. (Would key on identity if workers came from an
+  untrusted caller.)
+* **Reproducibility:** `requirements.txt` pins direct deps to bounded ranges;
+  `requirements.lock` is the exact `pip freeze` snapshot used in development.
+* Real-model runs take longer and can legitimately HOLD under strict consent;
+  the mock paths are deterministic and instant for a reliable demo.

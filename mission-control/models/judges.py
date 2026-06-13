@@ -51,16 +51,20 @@ class JudgeConfig:
 # pipeline (--preset) and as deep judges if MAX_JUDGES is raised.
 PRESETS: list[JudgeConfig] = [
     # --- the diverse six (one per lineage) ---
+    # Posture note (honest + demo-stable): keep the DEEP judges 'normal' (they
+    # gate the nuanced criteria, so over-strictness there causes needless HOLDs);
+    # put the 'strict' posture only on a LEXICAL judge, where it just means
+    # "catch every banned phrase" -- a mechanical check that can't add noise.
     JudgeConfig("GPT-OSS 120B", "nvidia", "openai/gpt-oss-120b",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "gptoss120", "openai", "deep"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "gptoss120", "openai", "deep"),
     JudgeConfig("Qwen3 Next 80B", "nvidia", "qwen/qwen3-next-80b-a3b-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "qwen3", "qwen", "deep"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "qwen3", "qwen", "deep"),
     JudgeConfig("GLM 5.1", "nvidia", "z-ai/glm-5.1",
                 "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "glm", "zai", "deep"),
     JudgeConfig("Mixtral 8x7B", "nvidia", "mistralai/mixtral-8x7b-instruct-v0.1",
                 "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "mixtral", "mistral", "standard"),
     JudgeConfig("Phi-4 mini", "nvidia", "microsoft/phi-4-mini-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "phi4", "microsoft", "lexical"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "phi4", "microsoft", "lexical"),
     JudgeConfig("Llama 4 Maverick", "nvidia", "meta/llama-4-maverick-17b-128e-instruct",
                 "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama4", "meta", "lexical"),
     # --- spares (kept in config; distinct or fast fallbacks) ---

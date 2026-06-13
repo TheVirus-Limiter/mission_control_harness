@@ -115,14 +115,32 @@ Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
 ## Tests
 
 ```bash
-pytest -q          # 59 tests: the deterministic guarantees in HARNESS.md §Acceptance
+pytest -q          # 73 tests: the deterministic guarantees in HARNESS.md §Acceptance
+
+# Confirm the REAL multi-vendor panel works before a live demo (dry-run, never posts):
+python verify_real.py            # preset=claude, mission=lumora — prints consent/held
+# Demo-stable real setting if runs hold/escalate too often: MAX_JUDGES=4, deep judges 'normal'.
 ```
 
 ## Deploy
 
-A `Procfile` and `render.yaml` are included. On Railway, push the repo (the
-Procfile is auto-detected). On Render, create a Blueprint from `render.yaml`.
-Posting stays in dry-run in the cloud (`DRY_RUN=1`) so nothing is ever sent.
+A `Procfile` and `render.yaml` are included; `requirements.txt` pins direct deps
+to bounded ranges and `requirements.lock` is the exact `pip freeze` snapshot.
+
+**Deploy to Render (live URL), step by step.** (1) Push this repo to GitHub:
+`git init` (if needed), `git add -A && git commit -m "deploy"`, create an empty
+repo at github.com/new, then
+`git remote add origin https://github.com/<you>/<repo>.git && git push -u origin main`.
+(2) At [dashboard.render.com](https://dashboard.render.com) → **New +** → **Blueprint**,
+connect the repo, and Render reads `mission-control/render.yaml` (a free web
+service: `rootDir: mission-control`, `pip install -r requirements.txt`,
+`uvicorn ui.server:app --host 0.0.0.0 --port $PORT`, `PYTHON_VERSION=3.12.7`,
+`DRY_RUN=1`). Click **Apply** and wait for the build. (3) Open the
+`https://mission-control-XXXX.onrender.com` URL Render gives you, then click
+**▶ RUN MISSION** — a mock run completes in the cloud (verified: a fresh
+empty-DB cold start serves the dashboard and `POST /api/launch` reaches a dry-run
+post). Posting is forced dry-run in the cloud, so nothing is ever sent.
+(Railway works too: it auto-detects the `Procfile`.)
 
 ## Layout
 

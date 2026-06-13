@@ -247,7 +247,40 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
 .alarm .ty{font-family:var(--disp);font-weight:700} .alarm .cx{margin:6px 0;color:#dce8f7}
 .alarm .rc{color:var(--dim);font-size:13px} .alarm .rc::before{content:"▸ ";color:var(--cyan)}
 
-@media(max-width:560px){ .xbody{font-size:17px} .course{height:128px} .runner{font-size:24px} .ln{grid-template-columns:50px 70px 70px 1fr} }
+/* lifecycle rail (on every tab) */
+.rail{display:flex;align-items:center;gap:8px;padding:2px 22px 12px}
+.phase{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--hair);
+  font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.08em;color:var(--faint);background:rgba(10,16,30,.5)}
+.phase .pdot{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;border:1.5px solid currentColor}
+.phase.idle{color:var(--faint)}
+.phase.active{color:var(--cyan);border-color:rgba(63,224,255,.5);box-shadow:0 0 16px rgba(63,224,255,.2)}
+.phase.active .pdot{background:var(--cyan);color:#04121f;animation:pulse 1.2s infinite}
+.phase.done{color:var(--go);border-color:rgba(61,245,160,.4)} .phase.done .pdot{background:var(--go);color:#04121f}
+.phase.fail{color:var(--hold);border-color:rgba(255,200,97,.5)} .phase.fail .pdot{background:var(--hold);color:#1a1306}
+.rconn{flex:0 0 26px;height:2px;border-radius:2px;background:var(--hair)}
+.rconn.lit{background:linear-gradient(90deg,var(--go),var(--cyan))}
+
+/* blocked-post CLIMAX (must read on a projector) */
+.heldbanner{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:.04em;color:var(--hold);
+  text-align:center;padding:14px;border:1px solid rgba(255,200,97,.45);background:rgba(255,200,97,.08);
+  border-radius:14px;margin-bottom:14px;text-shadow:0 0 18px rgba(255,200,97,.35)}
+.xcard.frozen{position:relative;border:2px solid var(--hold);box-shadow:0 0 34px rgba(255,200,97,.22)}
+.xcard.frozen::after{content:"HELD";position:absolute;top:18px;right:-6px;transform:rotate(9deg);
+  font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:.14em;color:var(--hold);
+  border:3px solid var(--hold);border-radius:10px;padding:4px 16px;background:rgba(20,14,4,.7);
+  text-shadow:0 0 14px rgba(255,200,97,.5)}
+.xbody.big{font-size:21px;line-height:1.5}
+.xbody mark.lie{background:rgba(255,93,115,.28);color:#fff;border-bottom:3px solid var(--no);
+  border-radius:4px;padding:0 4px;font-weight:600;box-shadow:0 0 0 1px rgba(255,93,115,.4)}
+.heldwhy{margin-top:14px;border:1px solid rgba(255,93,115,.3);background:rgba(255,93,115,.06);border-radius:12px;padding:14px}
+.heldreason{font-size:14px;color:#ffd7dd;margin:4px 0} .heldreason b{color:var(--no);font-family:var(--mono)}
+
+/* timeline streaming */
+.ln.stream{animation:streamin .34s ease both}
+@keyframes streamin{from{opacity:0;transform:translateX(-7px)}to{opacity:1;transform:none}}
+
+@media(max-width:560px){ .xbody{font-size:17px} .xbody.big{font-size:18px} .course{height:128px}
+  .runner{font-size:24px} .ln{grid-template-columns:50px 70px 70px 1fr} .rail{flex-wrap:wrap} }
 </style>
 </head>
 <body>
@@ -276,6 +309,7 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
     <div class="field"><label>Inspect run</label><select id="runsel"></select></div>
   </div>
   <div class="stats" id="stats"></div>
+  <div class="rail" id="rail" aria-label="trust lifecycle"></div>
   <nav role="tablist">
     <button class="tab" role="tab" aria-selected="true" data-v="mission">Mission</button>
     <button class="tab" role="tab" aria-selected="false" data-v="intel">Intel</button>
@@ -297,7 +331,7 @@ const API=(location.protocol==='http:'||location.protocol==='https:')?'':'http:/
 const $=s=>document.querySelector(s);
 const esc=s=>(s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let runId=null,cache=null,lastSig=null,active='mission',timer=null,tfilter='all',gKey=null,twKey=null;
+let runId=null,cache=null,lastSig=null,active='mission',timer=null,tfilter='all',gKey=null,twKey=null,mSeq={};
 const DISC=[['run','🏃'],['swim','🏊'],['cycle','🚴'],['climb','🧗'],['vault','🤸']];
 
 async function J(u,o){const r=await fetch(API+u,o);if(!r.ok&&r.status>=500)throw new Error(r.status);return r.json();}
@@ -348,8 +382,32 @@ function renderStats(d){
     (d.rehearsal_proof?tile('Rehearsal','🔒 egress '+esc(d.rehearsal_proof.egress),'cy','glass'):'');
   const ap=$('#apill'),n=(d.alarms||[]).length;ap.hidden=!n;ap.textContent=n;
   ap.className='pill'+((d.alarms||[]).some(a=>a.severity==='critical')?' crit':'');
+  renderRail(d);
 }
 function tile(k,v,cls,extra){return `<div class="tile ${extra}"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div></div>`;}
+
+// Trust lifecycle: ADMISSION -> REHEARSAL -> ACTION, always visible.
+function lifecycle(d){
+  const ev=d.timeline||[], al=(d.alarms||[]).map(a=>a.type);
+  const any=(f)=>ev.some(f);
+  const certFail=al.includes('CERTIFICATION_FAILED');
+  const researchDone=any(e=>e.kind==='stage'&&e.stage==='research'&&e.name==='pass');
+  const admissionStarted=any(e=>e.kind==='attack'||e.kind==='certificate');
+  const admission= certFail?'fail': researchDone?'done': admissionStarted?'active':'idle';
+  const rehStarted=any(e=>e.stage==='rehearsal');
+  const rehDone=any(e=>e.kind==='stage'&&e.stage==='rehearsal'&&e.name==='pass');
+  const rehFail=(d.halted&&rehStarted&&!rehDone)|| (d.panel&&d.panel.eligible===false);
+  const rehearsal= rehDone?'done': rehFail?'fail': rehStarted?'active':'idle';
+  const action= d.posted?'done': d.awaiting?'active': (rehDone?'active':'idle');
+  return [['ADMISSION',admission],['REHEARSAL',rehearsal],['ACTION',action]];
+}
+function renderRail(d){
+  const ph=lifecycle(d), ico={done:'✓',active:'●',fail:'!',idle:'○'};
+  $('#rail').innerHTML=ph.map((p,i)=>{
+    const conn=i<2?`<div class="rconn ${p[1]==='done'?'lit':''}"></div>`:'';
+    return `<div class="phase ${p[1]}"><span class="pdot">${ico[p[1]]}</span>${p[0]}</div>${conn}`;
+  }).join('');
+}
 function renderActive(){({mission:renderMission,intel:renderIntel,gauntlet:renderGauntlet,broadcast:renderBroadcast,alarms:renderAlarms}[active])(cache);}
 
 /* ---------- MISSION ---------- */
@@ -362,10 +420,17 @@ function renderMission(d){
     (i<stages.length-1?'<div class="conn-l"></div>':'');}).join('');
   const tone={go:'go',nogo:'no',crit:'no',high:'no',held:'hold',med:'hold',accent:'cy',muted:'mut'};
   const want=r=>tfilter==='all'||(tfilter==='alarms'&&r.kind==='alarm')||(tfilter==='gates'&&['gate','attack','certificate','panel','verdict'].includes(r.kind))||(tfilter==='checks'&&r.kind==='check');
-  const lines=d.timeline.filter(want).map(r=>`<div class="ln ${r.tone==='nogo'||r.tone==='crit'?'bad':''}">
+  // STREAM new rows in as they arrive (and on first view) -- fast, capped stagger.
+  const prevSeq=mSeq[d.run_id]||0; let k=0;
+  const lines=d.timeline.filter(want).map(r=>{
+    const isNew=r.seq>prevSeq;
+    const cls='ln '+((r.tone==='nogo'||r.tone==='crit')?'bad ':'')+(isNew?'stream':'');
+    const dly=isNew?` style="animation-delay:${Math.min(k++,14)*0.03}s"`:'';
+    return `<div class="${cls}"${dly}>
     <span class="tm">${tm(r.ts)}</span><span class="sg">${esc(r.stage)}</span>
     <span class="bdg b-${tone[r.tone]||'mut'}">${esc(r.status)}</span>
-    <span>${esc(r.text)}${r.meta?`<div class="mt">${esc(r.meta)}</div>`:''}</span></div>`).join('');
+    <span>${esc(r.text)}${r.meta?`<div class="mt">${esc(r.meta)}</div>`:''}</span></div>`;}).join('');
+  mSeq[d.run_id]=d.timeline.length?d.timeline[d.timeline.length-1].seq:0;
   $('#mission').innerHTML=`<div class="glass pad" style="margin-bottom:16px"><div class="flow">${flow}</div></div>
     <div class="glass pad"><h3>Flight log</h3>
     <div class="filters">${['all','alarms','gates','checks'].map(f=>`<span class="chip ${tfilter===f?'on':''}" data-f="${f}">${f}</span>`).join('')}</div>
@@ -442,6 +507,22 @@ async function runGauntlet(d){
 
 /* ---------- BROADCAST ---------- */
 function renderBroadcast(d){
+  const spans=((d.panel||{}).held_spans)||[];
+  const pp=d.post||{};
+  // THE CLIMAX: a content HOLD -> freeze the post, stamp HELD, highlight the lie.
+  if(spans.length && pp.present){
+    let body=esc(pp.text);
+    spans.forEach(h=>{ if(h.span){const s=esc(h.span); if(body.includes(s)) body=body.split(s).join(`<mark class="lie">${s}</mark>`);} });
+    const brand2=(d.mission||'').split('—')[0].trim()||'Brand';
+    const why=spans.map(h=>`<div class="heldreason"><b>${esc(h.criterion)}</b> — flagged by ${esc(h.judge)} (${esc(h.tier)}): ${esc(h.reason)}</div>`).join('');
+    $('#broadcast').innerHTML=`<div class="xwrap">
+      <div class="heldbanner">⏸ HELD BY THE REVIEW PANEL — THIS POST NEVER REACHED X</div>
+      <div class="xcard glass frozen"><div class="xtop"><div class="xrow"><div class="av ${vendorOf(brand2)}">${esc(initials(brand2))}</div>
+        <div style="flex:1"><div class="who2"><span class="dn">${esc(brand2)}</span><span class="vf">✔</span><span class="hd">${esc(pp.author||'@brand')}</span></div>
+        <div class="xbody big">${body}</div></div></div></div>
+      <div class="heldwhy">${why}</div></div>`;
+    return;
+  }
   if(d.halted||!(d.post||{}).present){const a=(d.alarms||[]).find(x=>['CERTIFICATION_FAILED','ESCALATE_HUMAN'].includes(x.type))||(d.alarms||[])[0];
     $('#broadcast').innerHTML=`<div class="xwrap">${a?`<div class="blocked"><div class="b1">⛔ POST BLOCKED — IT NEVER REACHED X</div>
       <div class="b2">${esc(a.type)} — ${esc(a.context)}</div><div class="b3">▸ ${esc(a.recommended_action)}</div></div>`:'<div class="empty">No post.</div>'}</div>`;return;}
