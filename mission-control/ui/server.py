@@ -215,6 +215,21 @@ def _assemble(st: Store, run_id: str) -> dict:
                "flags": (e["detail"] or {}).get("flags", [])}
               for e in events if e["kind"] == "draft" and e["detail"]]
 
+    # REVISION DIFFS: behaviour-change-on-feedback made visible. Between
+    # consecutive draft attempts of a stage, compute the word-level change and the
+    # checkpoint feedback that caused it (the failing draft's own flags).
+    by_stage: dict[str, list] = {}
+    for d in drafts:
+        by_stage.setdefault(d["stage"], []).append(d)
+    revisions = []
+    for stage, ds in by_stage.items():
+        ds = sorted(ds, key=lambda x: x["attempt"] or 0)
+        for a, b in zip(ds, ds[1:]):
+            diff = _word_diff(a["text"], b["text"])
+            revisions.append({"stage": stage, "from": a["attempt"], "to": b["attempt"],
+                              "ops": diff["ops"], "removed": diff["removed"],
+                              "added": diff["added"], "feedback": a["flags"]})
+
     # panel + post from outputs
     panel = _panel_view(st, run_id)
     post = _post_view(st, run_id, events)
@@ -227,8 +242,31 @@ def _assemble(st: Store, run_id: str) -> dict:
             "taken_down": taken_down, "post_id": post_id,
             "agents_certified": agents_certified, "open_alarms": open_alarms,
             "rehearsal_proof": rehearsal_proof, "research": research, "drafts": drafts,
+            "revisions": revisions,
             "timeline": timeline, "alarms": alarms, "gauntlet": gauntlet,
             "panel": panel, "post": post}
+
+
+def _word_diff(a: str, b: str) -> dict:
+    """Word-level diff for the revision view: an ordered op stream plus the lists
+    of removed / added words. Pure stdlib (difflib)."""
+    import difflib
+    at, bt = (a or "").split(), (b or "").split()
+    sm = difflib.SequenceMatcher(a=at, b=bt, autojunk=False)
+    ops, removed, added = [], [], []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            ops.append({"t": "eq", "text": " ".join(at[i1:i2])})
+        else:
+            if i2 > i1:
+                seg = at[i1:i2]
+                ops.append({"t": "del", "text": " ".join(seg)})
+                removed += seg
+            if j2 > j1:
+                seg = bt[j1:j2]
+                ops.append({"t": "ins", "text": " ".join(seg)})
+                added += seg
+    return {"ops": ops, "removed": removed, "added": added}
 
 
 def _is_live(events) -> bool:
@@ -336,6 +374,7 @@ def _report(st: Store, run_id: str) -> dict:
                       "gauntlet": view["gauntlet"]},
         "research": view["research"],
         "drafts": view["drafts"],
+        "revisions": view.get("revisions", []),
         "checkpoints": checkpoints,
         "rehearsal_proof": view["rehearsal_proof"],
         "panel": view["panel"],

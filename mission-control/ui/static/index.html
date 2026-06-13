@@ -147,6 +147,13 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
 .flagrow{padding:0 14px 12px;display:flex;flex-direction:column;gap:6px}
 .flagrow .fl{font-family:var(--mono);font-size:11.5px;color:#ffb6bd;background:rgba(255,93,115,.08);border-left:3px solid var(--no);border-radius:5px;padding:6px 9px}
 .flagrow .fl b{color:var(--no)}
+.rev{border:1px solid var(--hair);border-radius:12px;padding:14px;margin-bottom:12px;background:rgba(10,16,30,.5)}
+.rev .rh{font-family:var(--disp);font-weight:700;margin-bottom:8px} .rev .rstage{color:var(--violet);font-family:var(--mono);font-size:12px}
+.fbline{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-bottom:9px}
+.fbchip{display:inline-block;background:rgba(255,93,115,.1);border:1px solid rgba(255,93,115,.3);color:#ffb6bd;border-radius:6px;padding:1px 7px;margin:0 4px 4px 0}
+.diff{font-size:14.5px;line-height:1.7}
+.diff del{background:rgba(255,93,115,.18);color:#ffb0bb;text-decoration:line-through;border-radius:3px;padding:0 3px}
+.diff ins{background:rgba(61,245,160,.16);color:#aef5d3;text-decoration:none;border-radius:3px;padding:0 3px}
 
 /* GAUNTLET */
 .gintro{font-size:13px;color:var(--dim);margin-bottom:14px;line-height:1.5}
@@ -459,9 +466,17 @@ function renderIntel(d){
       <div class="body">${highlight(dr.text,dr.flags)}</div>
       ${(dr.flags||[]).length?`<div class="flagrow">${dr.flags.map(f=>`<div class="fl"><b>${esc(f.check)}</b> — ${esc(f.reason)}${f.span?`: “${esc(f.span)}”`:''}</div>`).join('')}</div>`:''}
     </div>`).join('')||'<div class="empty">No drafts yet.</div>';
+  // REVISION DIFFS: behaviour-change-on-feedback, made visible.
+  const revs=(d.revisions||[]).map(rv=>{
+    const diff=(rv.ops||[]).map(o=>o.t==='eq'?esc(o.text):o.t==='del'?`<del>${esc(o.text)}</del>`:`<ins>${esc(o.text)}</ins>`).join(' ');
+    const fb=(rv.feedback||[]).map(f=>`<span class="fbchip">${esc(f.check)}${f.span?`: “${esc((f.span||'').slice(0,46))}”`:''}</span>`).join('');
+    return `<div class="rev"><div class="rh">Draft #${rv.from} → #${rv.to} · <span class="rstage">${esc(rv.stage)}</span></div>
+      ${fb?`<div class="fbline">feedback that forced the rewrite: ${fb}</div>`:''}
+      <div class="diff">${diff}</div></div>`;}).join('');
   $('#intel').innerHTML=`<div class="cols">
     <div class="glass pad"><h3>What it searched</h3>${research}</div>
-    <div class="glass pad"><h3>What the model wrote — and where it got flagged</h3>${drafts}</div></div>`;
+    <div class="glass pad"><h3>What the model wrote — and where it got flagged</h3>${drafts}</div></div>`+
+    (revs?`<div class="glass pad" style="margin-top:16px"><h3>How it changed on feedback — revision diff</h3>${revs}</div>`:'');
 }
 
 /* ---------- GAUNTLET ---------- */
