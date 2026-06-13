@@ -1,690 +1,576 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>MISSION CONTROL</title>
+<title>Mission Control — Trust Harness</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#05060c; --ink:#eaf2ff; --dim:#9bb0cc; --faint:#62748f;
-  --cyan:#3fe0ff; --violet:#8b6cff; --magenta:#ff5cdd; --gold:#ffd24a;
-  --go:#3df5a0; --hold:#ffc861; --no:#ff5d73;
-  --glass:rgba(18,26,44,.55); --glass2:rgba(13,20,36,.6); --hair:rgba(150,180,255,.12);
-  --x-blue:#1d9bf0;
-  --run:#ff8a3d; --swim:#2aa9ff; --cycle:#36d97a; --climb:#d49a5a; --vault:#b07bff;
-  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
-  --disp:"Space Grotesk",system-ui,sans-serif; --body:"Inter",system-ui,sans-serif;
+  --bg:#040706; --ink:#bdeccf; --ink-bright:#eaf4ee; --dim:#9fc7b1; --faint:#5d7a6c; --faintest:#46604f;
+  --go:#35ff9e; --held:#ffb454; --no:#ff5466; --high:#ff8a5c; --cyan:#6fd0ef; --gold:#ffd24a;
+  --tier-deep:#c5a8ff; --tier-standard:#8fdcff; --tier-lexical:#ffce8a; --tier-untrust:#ff9aa3;
+  --panel:rgba(8,16,12,.6); --panel2:rgba(6,12,9,.5); --hair:rgba(53,255,158,.14); --console:rgba(3,7,5,.92);
+  --x-bg:#000; --x-border:#2f3336; --x-text:#e7e9ea; --x-muted:#71767b; --x-blue:#1d9bf0; --x-av:#5b53b8;
+  --mono:'JetBrains Mono',ui-monospace,monospace; --sans:'Space Grotesk',system-ui,sans-serif; --arc:'Press Start 2P',monospace;
 }
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;-webkit-font-smoothing:antialiased}
-body{min-height:100vh;overflow-x:hidden;position:relative}
-a{color:var(--cyan);text-decoration:none}
-/* aurora atmosphere */
-.aurora{position:fixed;inset:-20%;z-index:-2;filter:blur(70px);opacity:.55;pointer-events:none}
-.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:drift 22s ease-in-out infinite}
-.aurora i:nth-child(1){width:46vw;height:46vw;left:-6vw;top:-8vw;background:radial-gradient(circle,#1b6fff,transparent 60%)}
-.aurora i:nth-child(2){width:42vw;height:42vw;right:-8vw;top:-6vw;background:radial-gradient(circle,#b23cff,transparent 60%);animation-delay:-6s}
-.aurora i:nth-child(3){width:52vw;height:52vw;left:18vw;bottom:-22vw;background:radial-gradient(circle,#00d4ff,transparent 60%);animation-delay:-12s}
-.aurora i:nth-child(4){width:34vw;height:34vw;right:6vw;bottom:-12vw;background:radial-gradient(circle,#ff4fae,transparent 60%);animation-delay:-3s}
-@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(5vw,4vh) scale(1.12)}66%{transform:translate(-4vw,2vh) scale(.95)}}
-.grid{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.35;
-  background-image:linear-gradient(rgba(120,160,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,255,.05) 1px,transparent 1px);
-  background-size:46px 46px;mask-image:radial-gradient(ellipse at 50% 0,#000,transparent 80%)}
-#fx{position:fixed;inset:0;z-index:60;pointer-events:none}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  height:100vh;display:flex;flex-direction:column}
+button{font-family:inherit;cursor:pointer}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:rgba(53,255,158,.18);border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
 
-.glass{background:var(--glass);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);
-  border:1px solid var(--hair);border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06)}
+/* ---- fixed background layers ---- */
+#rain,.scan,.vig{position:fixed;inset:0;pointer-events:none}
+#rain{z-index:0;opacity:.07}
+.scan{z-index:1;background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);mix-blend-mode:multiply}
+.vig{z-index:2;box-shadow:inset 0 0 240px 50px rgba(0,0,0,.85)}
 
-/* header */
-header{position:sticky;top:0;z-index:20;backdrop-filter:blur(16px);background:linear-gradient(180deg,rgba(8,11,22,.85),rgba(8,11,22,.5));
-  border-bottom:1px solid var(--hair)}
-.bar{display:flex;align-items:center;gap:14px;padding:13px 22px;flex-wrap:wrap}
-.brand{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:.04em;
-  background:linear-gradient(90deg,#fff,#7fd4ff 40%,#b78bff 80%);-webkit-background-clip:text;background-clip:text;color:transparent}
-.brand .mk{color:var(--cyan);-webkit-text-fill-color:initial;filter:drop-shadow(0 0 8px var(--cyan))}
-.brand small{font-family:var(--mono);font-size:10px;color:var(--faint);-webkit-text-fill-color:var(--faint);letter-spacing:.18em}
-.sp{flex:1}
-.conn{font-family:var(--mono);font-size:11px;color:var(--go);display:flex;align-items:center;gap:6px}
-.conn b{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 10px var(--go);animation:pulse 1.6s infinite}
-.conn.down{color:var(--no)} .conn.down b{background:var(--no);box-shadow:0 0 10px var(--no)}
-@keyframes pulse{50%{opacity:.3}}
+/* ---- shell column ---- */
+#app{position:relative;z-index:3;display:flex;flex-direction:column;height:100vh;min-height:0}
 
-/* control deck */
-.deck{display:flex;gap:10px;align-items:flex-end;padding:0 22px 14px;flex-wrap:wrap}
-.field{display:flex;flex-direction:column;gap:5px}
-.field label{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;padding-left:2px}
-select{appearance:none;background:rgba(10,16,30,.8);color:var(--ink);border:1px solid var(--hair);border-radius:10px;
-  padding:9px 30px 9px 12px;font-family:var(--mono);font-size:12.5px;cursor:pointer;min-width:140px;transition:.18s;
-  background-image:linear-gradient(45deg,transparent 50%,var(--cyan) 50%),linear-gradient(135deg,var(--cyan) 50%,transparent 50%);
-  background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px;background-repeat:no-repeat}
-select:hover{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(63,224,255,.1)}
-.btn{font-family:var(--disp);font-weight:700;border:none;border-radius:10px;padding:10px 18px;cursor:pointer;transition:.18s;letter-spacing:.03em}
-.btn.run{background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04121f;box-shadow:0 6px 22px rgba(80,120,255,.4)}
-.btn.run:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(120,90,255,.5)}
-.btn.run:active{transform:translateY(0)}
-.btn.run:disabled{opacity:.6;cursor:wait}
-.btn.ghost{background:rgba(255,255,255,.05);color:var(--ink);border:1px solid var(--hair)}
-.btn.ghost:hover{border-color:var(--cyan)} .btn.danger{color:#ffb0bb;border-color:rgba(255,93,115,.4)}
+/* ---- header ---- */
+#hdr{flex:none;display:flex;align-items:center;gap:16px;padding:10px 20px;border-bottom:1px solid var(--hair);
+  background:rgba(4,9,7,.7);backdrop-filter:blur(6px)}
+.brand{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--go);text-shadow:0 0 12px rgba(53,255,158,.6);letter-spacing:.02em}
+.stepper{display:flex;align-items:center;gap:2px}
+.step{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;padding:5px 10px;border-radius:7px;
+  border:1px solid transparent;color:var(--faintest);letter-spacing:.05em;text-transform:uppercase;transition:.2s}
+.step .dot{width:6px;height:6px;border-radius:50%;background:#2c4636}
+.step.done{color:#6fae8e}.step.done .dot{background:var(--go)}
+.step.done{cursor:pointer}
+.step.active{color:var(--go);background:rgba(53,255,158,.1);border-color:rgba(53,255,158,.4)}
+.step.active .dot{background:var(--go);box-shadow:0 0 8px var(--go)}
+.step.fail{color:var(--no)}.step.fail .dot{background:var(--no);box-shadow:0 0 8px var(--no)}
+.step.dim{opacity:.4}
+.sep{color:#2c4636;font-size:11px}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:11px}
+.agent-chip{color:var(--dim);border:1px solid var(--hair);border-radius:7px;padding:4px 9px}
+.agent-chip b{color:var(--ink-bright)}
+.live{display:flex;align-items:center;gap:6px;color:var(--go);font-size:10.5px;letter-spacing:.08em}
+.live .d{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 8px var(--go);animation:pulse 1.5s infinite}
 
-/* stat tiles */
-.stats{display:flex;gap:12px;padding:0 22px 8px;flex-wrap:wrap}
-.tile{flex:1;min-width:130px;padding:12px 16px;border-radius:14px}
-.tile .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--faint);text-transform:uppercase}
-.tile .v{font-family:var(--disp);font-weight:700;font-size:22px;margin-top:3px;line-height:1}
-.v.go{color:var(--go)} .v.no{color:var(--no)} .v.hold{color:var(--hold)} .v.cy{color:var(--cyan)}
-.costsub{font-size:11px;color:var(--faint);font-weight:600} .costsub2{font-size:10px;color:var(--mut);font-family:var(--mono);margin-top:4px}
-.statusdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
-.sd-go{background:var(--go);box-shadow:0 0 12px var(--go)} .sd-no{background:var(--no);box-shadow:0 0 12px var(--no)}
-.sd-hold{background:var(--hold);box-shadow:0 0 12px var(--hold)} .sd-run{background:var(--cyan);box-shadow:0 0 12px var(--cyan);animation:pulse 1.3s infinite}
+/* ---- stage ---- */
+#stage{flex:1;min-height:0;overflow:auto;position:relative}
 
-/* tabs */
-nav{display:flex;gap:6px;padding:6px 22px 0;flex-wrap:wrap}
-.tab{font-family:var(--disp);font-weight:600;font-size:13.5px;letter-spacing:.02em;color:var(--dim);background:transparent;border:none;
-  padding:11px 18px;border-radius:12px 12px 0 0;cursor:pointer;position:relative;transition:.18s}
-.tab:hover{color:var(--ink)}
-.tab[aria-selected=true]{color:var(--ink)}
-.tab[aria-selected=true]::after{content:"";position:absolute;left:14px;right:14px;bottom:0;height:3px;border-radius:3px;
-  background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 0 12px rgba(80,140,255,.6)}
-.tab .pill{margin-left:7px;font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:9px;background:rgba(255,200,97,.16);color:var(--hold)}
-.tab .pill.crit{background:rgba(255,93,115,.2);color:var(--no)}
-main{padding:18px 22px 90px}
-.view{display:none;animation:fade .35s ease}.view.active{display:block}
-@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
-h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase;margin:0 0 14px;font-weight:600}
-.empty{color:var(--faint);padding:34px;text-align:center}
-.pad{padding:18px}
+/* ---- console dock ---- */
+#dock{flex:none;border-top:1px solid var(--hair);background:var(--console);transition:height .2s;height:182px;display:flex;flex-direction:column}
+#dock.collapsed{height:38px}
+.dock-bar{flex:none;display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--faint);border-bottom:1px solid rgba(53,255,158,.07)}
+.dock-bar b{color:var(--dim)}
+.dock-bar .meta{margin-left:auto;display:flex;gap:14px;align-items:center;color:var(--faint)}
+.dock-bar .cost{color:var(--cyan)}
+#dock.collapsed .dock-body{display:none}
+.dock-body{flex:1;overflow:auto;padding:6px 0 10px}
+.logrow{display:grid;grid-template-columns:54px 90px 88px 1fr;gap:10px;padding:3px 14px;font-family:var(--mono);font-size:12px;line-height:1.45;align-items:baseline}
+.logrow.bad{border-left:2px solid var(--no);background:rgba(255,84,102,.05)}
+.logrow .t{color:#4f7163}
+.logrow .sg{color:#6f9fb0}
+.logrow .bd{font-weight:700;font-size:10.5px;padding:1px 7px;border-radius:5px;justify-self:start;white-space:nowrap}
+.logrow .tx{color:var(--ink)}
+.logrow .tx .mt{color:var(--faint);font-size:11px;margin-top:1px}
+.empty-log{padding:10px 16px;font-family:var(--mono);font-size:12px;color:var(--faint)}
+.cur::after{content:'█';animation:blink 1s steps(2) infinite;color:var(--go)}
 
-/* pipeline flow */
-.flow{display:flex;align-items:stretch;gap:0;margin-bottom:16px;flex-wrap:wrap}
-.fnode{flex:1;min-width:120px;padding:14px 16px;border-radius:14px;background:rgba(12,18,34,.5);border:1px solid var(--hair);position:relative;transition:.3s}
-.fnode .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--faint);text-transform:uppercase}
-.fnode .s{font-family:var(--disp);font-weight:700;font-size:18px;margin-top:6px;color:var(--faint)}
-.fnode.done{border-color:rgba(61,245,160,.4);box-shadow:0 0 22px rgba(61,245,160,.12)} .fnode.done .s{color:var(--go)}
-.fnode.active{border-color:var(--cyan);box-shadow:0 0 26px rgba(63,224,255,.25)} .fnode.active .s{color:var(--cyan)}
-.fnode.fail{border-color:rgba(255,93,115,.5)} .fnode.fail .s{color:var(--no)}
-.conn-l{flex:0 0 26px;align-self:center;height:3px;background:linear-gradient(90deg,var(--hair),var(--cyan),var(--hair));
-  background-size:200% 100%;border-radius:3px;animation:flowline 2s linear infinite;opacity:.5}
-@keyframes flowline{to{background-position:-200% 0}}
+/* status colors */
+.c-go{color:var(--go);background:rgba(53,255,158,.15)}
+.c-no{color:var(--no);background:rgba(255,84,102,.16)}
+.c-high{color:var(--high);background:rgba(255,138,92,.15)}
+.c-held{color:var(--held);background:rgba(255,180,84,.15)}
+.c-cyan{color:var(--cyan);background:rgba(111,208,239,.15)}
+.c-mut{color:#6f8f7f;background:rgba(111,143,127,.12)}
 
-.console{font-family:var(--mono);font-size:12.5px;max-height:54vh;overflow:auto;padding:6px 4px}
-.ln{display:grid;grid-template-columns:62px 92px 84px 1fr;gap:10px;padding:5px 12px;border-radius:8px;align-items:start}
-.ln:hover{background:rgba(120,160,255,.05)}
-.ln .tm{color:var(--faint)} .ln .sg{color:var(--violet)}
-.ln .bdg{font-weight:700;font-size:11px;padding:1px 8px;border-radius:6px;text-align:center;white-space:nowrap}
-.b-go{background:rgba(61,245,160,.14);color:var(--go)} .b-no{background:rgba(255,93,115,.16);color:var(--no)}
-.b-hold{background:rgba(255,200,97,.16);color:var(--hold)} .b-cy{background:rgba(63,224,255,.14);color:var(--cyan)}
-.b-mut{background:rgba(150,180,255,.08);color:var(--faint)}
-.ln .mt{color:var(--faint);font-size:11px;margin-top:2px}
-.ln.bad{background:rgba(255,93,115,.05)}
-.filters{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap}
-.chip{font-family:var(--mono);font-size:11px;padding:5px 13px;border-radius:999px;background:rgba(255,255,255,.04);color:var(--dim);
-  border:1px solid var(--hair);cursor:pointer;transition:.15s}
-.chip.on{border-color:var(--cyan);color:var(--cyan);background:rgba(63,224,255,.08)}
+/* ---- generic ---- */
+.wrap{max-width:1080px;margin:0 auto;padding:34px 24px}
+.h-arc{font-family:var(--arc);color:var(--go);text-shadow:0 0 16px rgba(53,255,158,.5)}
+.sub{color:var(--dim);font-size:13px;line-height:1.6;max-width:760px}
+.btn{font-family:var(--mono);font-weight:700;font-size:12px;border-radius:9px;padding:11px 18px;border:1px solid var(--hair);
+  background:rgba(53,255,158,.06);color:var(--ink);transition:.16s;letter-spacing:.03em}
+.btn:hover{border-color:rgba(53,255,158,.4)}
+.btn.go{background:rgba(53,255,158,.12);border-color:rgba(53,255,158,.5);color:var(--go);box-shadow:0 0 14px rgba(53,255,158,.2)}
+.btn.go:disabled{opacity:.4;box-shadow:none;cursor:not-allowed}
+.btn.arc{font-family:var(--arc);font-size:12px;padding:13px 20px}
+.btn.red{color:var(--no);border-color:rgba(255,84,102,.4);background:rgba(255,84,102,.08)}
+.btn.ghost{background:transparent;color:var(--dim)}
+.chip-row{display:flex;flex-wrap:wrap;gap:8px}
+.qchip{font-family:var(--mono);font-size:11px;padding:5px 11px;border-radius:7px;border:1px solid var(--hair);color:var(--dim);background:rgba(8,16,12,.5)}
+.qchip:hover{border-color:rgba(53,255,158,.4);color:var(--ink)}
 
-/* INTEL: research + drafts */
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:920px){.cols{grid-template-columns:1fr}}
-.searchbar{display:flex;align-items:center;gap:10px;background:rgba(8,14,26,.7);border:1px solid var(--hair);border-radius:12px;padding:11px 14px;margin-bottom:14px}
-.searchbar .mag{color:var(--cyan)} .searchbar .q{font-family:var(--mono);font-size:13px;color:var(--ink)}
-.searchbar .eng{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--hair);border-radius:6px;padding:2px 8px}
-.src{display:flex;gap:11px;padding:12px;border-radius:12px;background:rgba(10,16,30,.5);border:1px solid var(--hair);margin-bottom:10px;transition:.2s}
-.src:hover{border-color:rgba(63,224,255,.35);transform:translateX(2px)}
-.src .fav{width:34px;height:34px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;
-  background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04121f;font-family:var(--disp)}
-.src .id{font-family:var(--mono);font-size:10px;color:var(--cyan)}
-.src .tx{font-size:13px;color:var(--ink);margin:2px 0 3px;line-height:1.45}
-.src .dom{font-family:var(--mono);font-size:11px;color:var(--faint)}
-.draft{border-radius:14px;border:1px solid var(--hair);background:rgba(10,16,30,.5);margin-bottom:14px;overflow:hidden}
-.draft .dh{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--hair)}
-.draft .dh .att{font-family:var(--disp);font-weight:700}
-.draft .dh .who{font-family:var(--mono);font-size:11px;color:var(--faint)}
-.draft .dh .verd{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 10px;border-radius:7px}
-.verd.ok{background:rgba(61,245,160,.16);color:var(--go)} .verd.no{background:rgba(255,93,115,.16);color:var(--no)}
-.draft .body{padding:14px;font-size:14.5px;line-height:1.6;white-space:pre-wrap}
-.draft mark{background:rgba(255,93,115,.22);color:#ffd7dd;border-bottom:2px solid var(--no);border-radius:3px;padding:0 2px;cursor:help}
-.flagrow{padding:0 14px 12px;display:flex;flex-direction:column;gap:6px}
-.flagrow .fl{font-family:var(--mono);font-size:11.5px;color:#ffb6bd;background:rgba(255,93,115,.08);border-left:3px solid var(--no);border-radius:5px;padding:6px 9px}
-.flagrow .fl b{color:var(--no)}
-.rev{border:1px solid var(--hair);border-radius:12px;padding:14px;margin-bottom:12px;background:rgba(10,16,30,.5)}
-.rev .rh{font-family:var(--disp);font-weight:700;margin-bottom:8px} .rev .rstage{color:var(--violet);font-family:var(--mono);font-size:12px}
-.fbline{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-bottom:9px}
-.fbchip{display:inline-block;background:rgba(255,93,115,.1);border:1px solid rgba(255,93,115,.3);color:#ffb6bd;border-radius:6px;padding:1px 7px;margin:0 4px 4px 0}
-.diff{font-size:14.5px;line-height:1.7}
-.diff del{background:rgba(255,93,115,.18);color:#ffb0bb;text-decoration:line-through;border-radius:3px;padding:0 3px}
-.diff ins{background:rgba(61,245,160,.16);color:#aef5d3;text-decoration:none;border-radius:3px;padding:0 3px}
+/* ---- SELECT ---- */
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}
+.mcard{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:16px 13px 15px;border-radius:13px;
+  background:var(--panel);border:1px solid var(--hair);cursor:pointer;transition:.16s;position:relative}
+.mcard:hover{border-color:rgba(53,255,158,.35)}
+.mcard.sel{border-color:var(--go);background:rgba(53,255,158,.07);box-shadow:0 0 18px rgba(53,255,158,.2)}
+.mcard.sel.unt{border-color:var(--no);background:rgba(255,84,102,.07);box-shadow:0 0 18px rgba(255,84,102,.2)}
+.mcard .nm{font-weight:700;font-size:13.5px;color:var(--ink-bright)}
+.mcard .id{font-family:var(--mono);font-size:9.5px;color:var(--faint);word-break:break-all;line-height:1.4}
+.tier{font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:6px}
+.tier.deep{color:var(--tier-deep);background:rgba(155,108,255,.18)}
+.tier.standard{color:var(--tier-standard);background:rgba(57,197,255,.16)}
+.tier.lexical{color:var(--tier-lexical);background:rgba(255,180,84,.16)}
+.tier.untrust{color:var(--tier-untrust);background:rgba(255,84,102,.2)}
+.field-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:18px 0 8px}
+.tinput{width:100%;font-family:var(--mono);font-size:13.5px;background:#07120d;border:1px solid var(--hair);border-radius:9px;padding:11px 13px;color:var(--ink)}
+.tinput:focus{outline:none;border-color:rgba(53,255,158,.4)}
+.ctrls{display:flex;flex-wrap:wrap;align-items:flex-end;gap:22px;margin-top:20px}
+.seg{display:flex;border:1px solid var(--hair);border-radius:8px;overflow:hidden}
+.seg button{font-family:var(--mono);font-size:11px;padding:7px 12px;border:none;background:transparent;color:var(--dim)}
+.seg button.on{background:rgba(53,255,158,.12);color:var(--go)}
+.toggle{display:flex;align-items:center;gap:10px}
+.tk{width:44px;height:24px;border-radius:999px;background:#26352c;position:relative;transition:.18s;border:1px solid var(--hair)}
+.tk .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#7d9488;transition:.18s}
+.tk.on{background:rgba(53,255,158,.25)}.tk.on .knob{left:23px;background:var(--go)}
+.tlabel{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.hint{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-top:14px}
+.sess-strip{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px}
+.sess-strip b{color:var(--cyan)}
 
-/* GAUNTLET */
-.gintro{font-size:13px;color:var(--dim);margin-bottom:14px;line-height:1.5}
-.scoreboard{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:16px 18px;margin-bottom:16px;position:relative}
-.scoreboard .sbi{flex:1;min-width:90px;text-align:center}
-.scoreboard .sbn{font-family:var(--disp);font-weight:800;font-size:30px;line-height:1}
-.scoreboard .sbn.go{color:var(--go)} .scoreboard .sbn.no{color:var(--no)} .scoreboard .sbn.cy{color:var(--cyan)}
-.scoreboard .sbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-top:5px}
-.scoreboard .sbnote{position:absolute;top:8px;right:14px;font-size:10px;color:var(--faint)}
-.gintro .rp{cursor:pointer;color:var(--cyan);font-family:var(--mono);font-size:11px;border:1px solid var(--hair);border-radius:8px;padding:4px 11px;margin-left:6px}
-.track{position:relative;margin-bottom:18px;border-radius:18px;overflow:hidden;border:1px solid var(--hair);
-  background:linear-gradient(160deg,rgba(16,22,40,.7),rgba(8,12,22,.7))}
-.track .th{display:flex;align-items:center;gap:11px;padding:13px 16px;position:relative;z-index:2}
-.track .av0{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-family:var(--disp);color:#04121f}
-.track .nm{font-family:var(--disp);font-weight:700;font-size:15px} .track .vd{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
-.track .stamp{margin-left:auto;font-family:var(--disp);font-weight:700;letter-spacing:.08em;padding:5px 14px;border-radius:9px;border:2px solid;font-size:13px}
-.stamp.ok{color:var(--gold);border-color:var(--gold);text-shadow:0 0 14px rgba(255,210,74,.6);box-shadow:0 0 20px rgba(255,210,74,.2)}
-.stamp.no{color:var(--no);border-color:var(--no)}
-.course{position:relative;display:flex;height:150px;margin:0 2px}
-.seg{flex:1;position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:26px}
-.seg+.seg{border-left:2px dashed rgba(255,255,255,.1)}
-.seg .disc{position:absolute;top:12px;font-size:22px;opacity:.5;transition:.3s}
-.seg .lbl{position:absolute;bottom:7px;font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:#bcd6f5;text-transform:uppercase;text-align:center;
-  background:rgba(0,0,0,.4);padding:2px 5px;border-radius:5px;max-width:94%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.seg .mk{position:absolute;top:44px;font-size:17px;opacity:0;transition:.3s;transform:scale(.5)}
-.seg.cleared .mk{opacity:1;transform:scale(1)} .seg.cleared .disc{opacity:.9}
-.seg.fell{background:rgba(255,93,115,.14)} .seg.fell .mk{opacity:1;transform:scale(1)} .seg.fell .disc{opacity:.3}
-.seg.d-run{background:linear-gradient(180deg,rgba(255,138,61,.12),transparent 70%)}
-.seg.d-swim{background:linear-gradient(180deg,rgba(42,169,255,.16),transparent 70%)}
-.seg.d-cycle{background:linear-gradient(180deg,rgba(54,217,122,.13),transparent 70%)}
-.seg.d-climb{background:linear-gradient(180deg,rgba(212,154,90,.15),transparent 70%)}
-.seg.d-vault{background:linear-gradient(180deg,rgba(176,123,255,.15),transparent 70%)}
-.ground{position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,#26406a,#16294a)}
-.finish{position:absolute;right:8px;top:0;bottom:6px;width:16px;background:repeating-linear-gradient(45deg,#fff 0 7px,#0b0f1a 7px 14px);opacity:.6;border-radius:2px}
-.runner{position:absolute;bottom:8px;left:0;font-size:30px;z-index:4;transition:left .8s cubic-bezier(.45,.05,.3,1),transform .35s;
-  filter:drop-shadow(0 0 10px rgba(63,224,255,.6));will-change:left}
-.runner.tripped{transform:translateY(12px) rotate(86deg)}
-.medal{position:absolute;right:22px;bottom:38px;font-size:48px;opacity:0;transform:scale(.2) rotate(-30deg);z-index:5;
-  transition:.7s cubic-bezier(.2,1.5,.4,1)}
-.medal.show{opacity:1;transform:scale(1) rotate(0);filter:drop-shadow(0 0 18px rgba(255,210,74,.7))}
-.certstamp{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(2.6) rotate(-16deg);z-index:6;
-  font-family:var(--disp);font-weight:700;font-size:30px;letter-spacing:.1em;color:var(--gold);opacity:0;
-  border:4px solid var(--gold);border-radius:12px;padding:6px 18px;text-shadow:0 0 16px rgba(255,210,74,.6);box-shadow:0 0 30px rgba(255,210,74,.3)}
-.certstamp.slam{animation:slam .55s cubic-bezier(.2,1.3,.3,1) forwards}
-@keyframes slam{0%{opacity:0;transform:translate(-50%,-50%) scale(2.6) rotate(-16deg)}60%{opacity:1;transform:translate(-50%,-50%) scale(.9) rotate(-16deg)}100%{opacity:.96;transform:translate(-50%,-50%) scale(1) rotate(-16deg)}}
-.leakrow{padding:10px 16px;border-top:1px solid var(--hair)}
-.leakrow .lk{font-family:var(--mono);font-size:11px;color:#ffb6bd;background:rgba(255,93,115,.08);border:1px dashed rgba(255,93,115,.4);border-radius:8px;padding:8px 10px;margin-top:6px;white-space:pre-wrap;word-break:break-word}
+/* ---- robot sprite ---- */
+.bot{position:relative;width:36px;height:46px;transform-origin:bottom center}
+.bot span{position:absolute;background:var(--bd)}
+.bot-ant{top:1px;left:17px;width:2px;height:7px;background:var(--tr)!important}
+.bot-ant::after{content:'';position:absolute;top:-3px;left:-2px;width:6px;height:6px;border-radius:50%;background:var(--tr);box-shadow:0 0 6px var(--tr)}
+.bot-head{top:7px;left:6px;width:24px;height:18px;border-radius:6px}
+.bot-visor{top:12px;left:9px;width:18px;height:9px;background:#0a140f!important;border-radius:3px;display:flex;gap:3px;align-items:center;justify-content:center}
+.bot-visor i{position:static;width:4px;height:4px;border-radius:50%;background:var(--tr);box-shadow:0 0 5px var(--tr)}
+.bot-body{top:25px;left:7px;width:22px;height:15px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--arc);font-size:8px;color:#0a140f}
+.bot-arm{top:25px;width:4px;height:12px;border-radius:2px;transform-origin:top center}
+.bot-arm.l{left:4px}.bot-arm.r{right:4px}
+.bot-leg{top:38px;width:5px;height:9px;border-radius:2px;transform-origin:top center}
+.bot-leg.l{left:11px}.bot-leg.r{right:11px}
+.bot-run{animation:hop .34s infinite}
+.bot-run .bot-leg.l{animation:rl .34s infinite}.bot-run .bot-leg.r{animation:rl .34s infinite reverse}
+.bot-run .bot-arm.l{animation:ap .34s infinite reverse}.bot-run .bot-arm.r{animation:ap .34s infinite}
+.bot-down{transform:rotate(82deg);filter:grayscale(1)}
+.bot-down .bot-visor i{background:var(--no);box-shadow:0 0 5px var(--no)}
+.bot-win{animation:hop .9s infinite}
 
-/* BROADCAST */
-.xwrap{max-width:600px;margin:0 auto}
-.xcard{border-radius:16px;overflow:hidden}
-.xtop,.reply{padding:15px 18px}
-.xtop{border-bottom:1px solid var(--hair)} .reply{border-bottom:1px solid rgba(120,160,255,.07)}
-.xrow{display:flex;gap:12px}
-.av{width:46px;height:46px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;color:#04121f;font-family:var(--disp);font-size:17px}
-.av.anthropic{background:linear-gradient(135deg,#e0a06a,#c2683b)} .av.openai{background:linear-gradient(135deg,#19c39a,#0c7c61)}
-.av.meta{background:linear-gradient(135deg,#4f8cff,#1f4fd0);color:#fff} .av.mistral{background:linear-gradient(135deg,#ff8a2a,#ff3d00);color:#fff}
-.av.microsoft{background:linear-gradient(135deg,#86dc4b,#3aa10b)} .av.qwen{background:linear-gradient(135deg,#b06bff,#6a2cd0);color:#fff}
-.av.nvidia{background:linear-gradient(135deg,#86d400,#4f7d00)} .av.zai{background:linear-gradient(135deg,#5ad1ff,#1d7fd0)}
-.who2{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.who2 .dn{font-weight:700;color:#fff} .who2 .vf{color:var(--x-blue)} .who2 .hd{color:#7c8b9a;font-size:13px}
-.xbody{font-size:19px;line-height:1.5;color:#fff;white-space:pre-wrap;margin:5px 0;font-family:var(--body)}
-.reply .xbody{font-size:15px}
-.xbody .tag{color:var(--x-blue)}
-.flag{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:11px;padding:4px 10px;border-radius:8px}
-.flag.dry{color:var(--hold);background:rgba(255,200,97,.14);border:1px solid rgba(255,200,97,.3)}
-.flag.live{color:#fff;background:var(--no)} .flag.down{color:var(--hold);border:1px solid var(--hold)}
-.xact{display:flex;gap:34px;color:#7c8b9a;font-size:16px;margin-top:14px;align-items:center}
-.cc{margin-left:auto;font-family:var(--mono);font-size:12px} .cc.over{color:var(--no);font-weight:700}
-.verch{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
-.verch.pass{color:#04121f;background:var(--go)} .verch.held{color:#fff;background:var(--no)}
-.tier{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid}
-.tier.t-deep{color:var(--gold);border-color:rgba(255,210,74,.5);background:rgba(255,210,74,.08)}
-.tier.t-standard{color:var(--cyan);border-color:rgba(63,224,255,.4);background:rgba(63,224,255,.07)}
-.tier.t-lexical{color:var(--faint);border-color:var(--hair)}
-.covers{margin-top:6px;display:flex;gap:5px;flex-wrap:wrap}
-.covers .cc-chip{font-family:var(--mono);font-size:9.5px;color:var(--dim);border:1px solid var(--hair);border-radius:5px;padding:1px 6px}
-.covers::before{content:"votes on:";font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-right:2px}
-.rephead{padding:12px 18px;color:#7c8b9a;font-size:13px;border-bottom:1px solid var(--hair)}
-.reply{opacity:0;transform:translateY(10px);transition:.45s} .reply.in{opacity:1;transform:none}
-.reply.held{background:rgba(255,93,115,.04)}
-.typing{padding:13px 18px;color:#7c8b9a}
-.typing i{display:inline-block;width:6px;height:6px;border-radius:50%;background:#7c8b9a;margin:0 2px;animation:bob 1s infinite}
-.typing i:nth-child(2){animation-delay:.16s} .typing i:nth-child(3){animation-delay:.32s}
-@keyframes bob{50%{transform:translateY(-5px);opacity:.5}}
-.consent{display:inline-flex;align-items:center;gap:7px;margin:12px 0;padding:7px 16px;border-radius:999px;font-family:var(--disp);font-weight:700;font-size:13px}
-.consent.go{background:rgba(61,245,160,.14);color:var(--go);border:1px solid rgba(61,245,160,.35)}
-.consent.hold{background:rgba(255,200,97,.12);color:var(--hold);border:1px solid rgba(255,200,97,.35)}
-.blocked{border:1px solid rgba(255,93,115,.5);background:rgba(255,93,115,.07);border-radius:16px;padding:24px;text-align:center}
-.blocked .b1{font-family:var(--disp);font-weight:700;color:var(--no);font-size:18px;letter-spacing:.04em}
-.blocked .b2{margin:10px 0;font-size:15px} .blocked .b3{color:var(--dim);font-size:13px}
-.aw{border:1px solid rgba(255,200,97,.35);background:rgba(255,200,97,.08);border-radius:12px;padding:14px;margin-bottom:14px}
-.aw b{color:var(--hold)}
-.proof{display:flex;gap:9px;align-items:center;margin-bottom:12px;color:var(--cyan);font-size:12px;
-  border:1px solid rgba(63,224,255,.25);background:rgba(63,224,255,.06);border-radius:10px;padding:9px 13px}
-.act{margin:16px 0;display:flex;gap:10px;flex-wrap:wrap}
+/* generic phase panel */
+.phase{padding:24px}
+.glass{background:var(--panel);border:1px solid var(--hair);border-radius:13px;padding:16px}
 
-/* ALARMS */
-.alarm{border-left:4px solid;border-radius:12px;padding:15px 16px;margin-bottom:12px}
-.alarm.crit{border-color:var(--no)} .alarm.high{border-color:#ff7a6a} .alarm.med{border-color:var(--hold)}
-.alarm .at{display:flex;gap:10px;align-items:center;margin-bottom:6px}
-.alarm .sv{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:2px 8px;border-radius:6px;background:rgba(255,93,115,.16);color:var(--no)}
-.alarm.med .sv{background:rgba(255,200,97,.16);color:var(--hold)}
-.alarm .ty{font-family:var(--disp);font-weight:700} .alarm .cx{margin:6px 0;color:#dce8f7}
-.alarm .rc{color:var(--dim);font-size:13px} .alarm .rc::before{content:"▸ ";color:var(--cyan)}
-
-/* lifecycle rail (on every tab) */
-.rail{display:flex;align-items:center;gap:8px;padding:2px 22px 12px}
-.phase{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;border:1px solid var(--hair);
-  font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.08em;color:var(--faint);background:rgba(10,16,30,.5)}
-.phase .pdot{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;border:1.5px solid currentColor}
-.phase.idle{color:var(--faint)}
-.phase.active{color:var(--cyan);border-color:rgba(63,224,255,.5);box-shadow:0 0 16px rgba(63,224,255,.2)}
-.phase.active .pdot{background:var(--cyan);color:#04121f;animation:pulse 1.2s infinite}
-.phase.done{color:var(--go);border-color:rgba(61,245,160,.4)} .phase.done .pdot{background:var(--go);color:#04121f}
-.phase.fail{color:var(--hold);border-color:rgba(255,200,97,.5)} .phase.fail .pdot{background:var(--hold);color:#1a1306}
-.rconn{flex:0 0 26px;height:2px;border-radius:2px;background:var(--hair)}
-.rconn.lit{background:linear-gradient(90deg,var(--go),var(--cyan))}
-
-/* blocked-post CLIMAX (must read on a projector) */
-.heldbanner{font-family:var(--disp);font-weight:700;font-size:18px;letter-spacing:.04em;color:var(--hold);
-  text-align:center;padding:14px;border:1px solid rgba(255,200,97,.45);background:rgba(255,200,97,.08);
-  border-radius:14px;margin-bottom:14px;text-shadow:0 0 18px rgba(255,200,97,.35)}
-.xcard.frozen{position:relative;border:2px solid var(--hold);box-shadow:0 0 34px rgba(255,200,97,.22)}
-.xcard.frozen::after{content:"HELD";position:absolute;top:18px;right:-6px;transform:rotate(9deg);
-  font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:.14em;color:var(--hold);
-  border:3px solid var(--hold);border-radius:10px;padding:4px 16px;background:rgba(20,14,4,.7);
-  text-shadow:0 0 14px rgba(255,200,97,.5)}
-.xbody.big{font-size:21px;line-height:1.5}
-.xbody mark.lie{background:rgba(255,93,115,.28);color:#fff;border-bottom:3px solid var(--no);
-  border-radius:4px;padding:0 4px;font-weight:600;box-shadow:0 0 0 1px rgba(255,93,115,.4)}
-.heldwhy{margin-top:14px;border:1px solid rgba(255,93,115,.3);background:rgba(255,93,115,.06);border-radius:12px;padding:14px}
-.heldreason{font-size:14px;color:#ffd7dd;margin:4px 0} .heldreason b{color:var(--no);font-family:var(--mono)}
-.correct{margin-top:16px;padding:14px;border:1px solid rgba(63,224,255,.3);background:rgba(63,224,255,.05);border-radius:12px}
-.correct .ch{font-size:13px;color:var(--txt);margin-bottom:9px}
-.correct textarea{width:100%;box-sizing:border-box;min-height:60px;resize:vertical;background:rgba(255,255,255,.04);
-  border:1px solid var(--line);border-radius:9px;padding:10px;color:var(--txt);font:inherit;font-size:14px}
-.correct .saveline{display:flex;gap:8px;align-items:center;margin:10px 0;font-size:13px;color:var(--mut);cursor:pointer}
-.correct .cbtns{display:flex;gap:10px}
-.correct .chint{margin-top:9px;font-size:11px;color:var(--faint);line-height:1.5}
-.lgbox h3{display:flex;align-items:center;gap:10px}
-.lgtag{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--cyan);
-  border:1px solid rgba(63,224,255,.4);border-radius:20px;padding:2px 9px}
-.lgsub{font-size:12px;color:var(--mut);margin:6px 0 10px}
-.lgrule{font-size:14px;color:var(--txt);font-family:var(--mono);padding:4px 0}
-
-/* timeline streaming */
-.ln.stream{animation:streamin .34s ease both}
-@keyframes streamin{from{opacity:0;transform:translateX(-7px)}to{opacity:1;transform:none}}
-
-@media(max-width:560px){ .xbody{font-size:17px} .xbody.big{font-size:18px} .course{height:128px}
-  .runner{font-size:24px} .ln{grid-template-columns:50px 70px 70px 1fr} .rail{flex-wrap:wrap} }
+/* ---- keyframes ---- */
+@keyframes blink{50%{opacity:0}}
+@keyframes pulse{50%{opacity:.32}}
+@keyframes hop{50%{transform:translateY(-6px)}}
+@keyframes rl{0%,100%{transform:rotate(30deg)}50%{transform:rotate(-30deg)}}
+@keyframes ap{0%,100%{transform:rotate(-34deg)}50%{transform:rotate(34deg)}}
+@keyframes sw{to{transform:rotate(360deg)}}
+@keyframes fl{0%,100%{transform:rotate(10deg)}50%{transform:rotate(-10deg)}}
+@keyframes pedal{to{transform:rotate(360deg)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:.9}}
+@keyframes wavesurf{to{background-position-x:64px}}
+@keyframes splash{to{transform:translateY(-26px);opacity:0}}
+@keyframes speedline{from{transform:translateX(40px);opacity:.9}to{transform:translateX(-160px);opacity:0}}
+@keyframes flyout{to{transform:translate(180px,-160px);opacity:0}}
+@keyframes bangflash{from{transform:scale(.2);opacity:1}to{transform:scale(2.6);opacity:0}}
+@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.3)}100%{transform:scale(1)}}
+@keyframes winsweep{from{transform:translateX(-100%) skewX(-18deg)}to{transform:translateX(220%) skewX(-18deg)}}
+@keyframes slam{0%{transform:scale(2.3) rotate(-15deg);opacity:0}60%{transform:scale(.9) rotate(-15deg);opacity:1}100%{transform:scale(1) rotate(-15deg)}}
+@keyframes flash{50%{opacity:.25}}
+@keyframes float1{50%{transform:translateY(-6px)}}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
-<div class="aurora"><i></i><i></i><i></i><i></i></div>
-<div class="grid"></div>
-<canvas id="fx"></canvas>
+<canvas id="rain"></canvas>
+<div class="scan"></div>
+<div class="vig"></div>
 
-<header>
-  <div class="bar">
-    <span class="brand"><span class="mk">◆</span> MISSION CONTROL <small>TRUST&nbsp;HARNESS</small></span>
-    <span class="sp"></span>
-    <span id="conn" class="conn"><b></b> live</span>
-  </div>
-  <div class="deck">
-    <div class="field"><label>Mission</label><select id="mSel"></select></div>
-    <div class="field"><label>Agent model</label><select id="pSel"></select></div>
-    <div class="field"><label>Scenario</label><select id="sSel">
-      <option value="normal">normal task</option>
-      <option value="full">full barrage panel</option>
-      <option value="reject">sketchy agent · reject</option>
-      <option value="block">medical claim · held</option>
-      <option value="faulty">broken judge · escalate</option>
-    </select></div>
-    <button class="btn run" id="launch">▶ RUN MISSION</button>
-    <span class="sp"></span>
-    <div class="field"><label>Inspect run</label><select id="runsel"></select></div>
-    <div class="field"><label>Audit report</label><div style="display:flex;gap:6px">
-      <button class="btn ghost" id="dlJson" title="Download the full audit trail as JSON">⬇ JSON</button>
-      <button class="btn ghost" id="dlHtml" title="Open a printable HTML audit report">⬇ HTML</button>
-    </div></div>
-  </div>
-  <div class="stats" id="stats"></div>
-  <div class="rail" id="rail" aria-label="trust lifecycle"></div>
-  <nav role="tablist">
-    <button class="tab" role="tab" aria-selected="true" data-v="mission">Mission</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="intel">Intel</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="gauntlet">Proving Ground</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="broadcast">Broadcast</button>
-    <button class="tab" role="tab" aria-selected="false" data-v="alarms">Alarms<span id="apill" class="pill" hidden>0</span></button>
-  </nav>
-</header>
-<main>
-  <section id="mission" class="view active" role="tabpanel"></section>
-  <section id="intel" class="view" role="tabpanel"></section>
-  <section id="gauntlet" class="view" role="tabpanel"></section>
-  <section id="broadcast" class="view" role="tabpanel"></section>
-  <section id="alarms" class="view" role="tabpanel"></section>
-</main>
+<div id="app">
+  <header id="hdr">
+    <span class="brand">█ HARNESS</span>
+    <nav class="stepper" id="stepper"></nav>
+    <div class="hdr-right">
+      <span class="agent-chip" id="agentChip" hidden></span>
+      <span class="live"><span class="d"></span>STORE LIVE</span>
+    </div>
+  </header>
+
+  <main id="stage"></main>
+
+  <section id="dock">
+    <div class="dock-bar" id="dockBar">
+      <span>▸ <b>TELEMETRY</b></span>
+      <span style="color:var(--faintest)">// live flight log · persists across every gate</span>
+      <span class="meta"><span class="cost" id="dockCost"></span><span id="dockN">0 events</span><span id="dockCaret">▼</span></span>
+    </div>
+    <div class="dock-body" id="dockBody"><div class="empty-log cur">awaiting launch… </div></div>
+  </section>
+</div>
 
 <script>
-const API=(location.protocol==='http:'||location.protocol==='https:')?'':'http://127.0.0.1:8000';
-const $=s=>document.querySelector(s);
-const esc=s=>(s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let runId=null,cache=null,lastSig=null,active='mission',timer=null,tfilter='all',gKey=null,twKey=null,mSeq={},sessionStats=null;
-const DISC=[['run','🏃'],['swim','🏊'],['cycle','🚴'],['climb','🧗'],['vault','🤸']];
+async function J(u,opt){const r=await fetch(u,opt);if(!r.ok&&r.status>=500)throw new Error('HTTP '+r.status);return r.json();}
+const stripCites=t=>(t||'').replace(/\s*\[f\d+\]/g,'');
 
-async function J(u,o){const r=await fetch(API+u,o);if(!r.ok&&r.status>=500)throw new Error(r.status);return r.json();}
-function setConn(ok){const c=$('#conn');c.className='conn'+(ok?'':' down');c.lastChild.textContent=ok?' live':' offline — retrying';}
-function tm(t){return t?new Date(t*1000).toLocaleTimeString([],{hour12:false}):'';}
-function vendorOf(n){n=(n||'').toLowerCase();
-  if(/claude|anthropic/.test(n))return'anthropic'; if(/gpt|openai/.test(n))return'openai';
-  if(/llama|meta/.test(n))return'meta'; if(/mixtral|mistral/.test(n))return'mistral';
-  if(/phi|microsoft/.test(n))return'microsoft'; if(/qwen/.test(n))return'qwen';
-  if(/glm|z-ai|zai/.test(n))return'zai'; if(/nemotron|nvidia/.test(n))return'nvidia';return'';}
-function handleOf(n){const v=vendorOf(n);return '@'+({anthropic:'claude_ai',openai:'openai',meta:'AIatMeta',mistral:'MistralAI',microsoft:'microsoft',qwen:'Alibaba_Qwen',nvidia:'nvidia',zai:'Zai_org'}[v]||(n||'bot').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12));}
-function initials(n){return (n||'?').replace(/[^A-Za-z0-9 ]/g,'').trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();}
-function domainOf(u){try{return new URL(u).hostname.replace('www.','');}catch(e){return u||'';}}
+/* ===== state ===== */
+const PHASES=['select','gauntlet','write','rehearsal','approval'];
+const STEP_LABELS={select:'PICK',gauntlet:'GAUNTLET',write:'WRITE',rehearsal:'REHEARSAL',approval:'APPROVE'};
+let presets=[], session=null;
+let runId=null, view=null, phase='select', failAt=null, t0=null;
+let played=new Set(), seenSeq=new Set(), pollTimer=null, autoTimer=null;
+let sel={model:null, vendor:null, label:null, topic:'Lumora modular sleep system launch', inject:'none', human:true, mission:'lumora'};
+let critiques=[];
 
-async function loadControls(){
-  const [p,m]=await Promise.all([J('/api/presets'),J('/api/missions')]);
-  $('#mSel').innerHTML=m.map(x=>`<option value="${x.key}">${esc(x.name)}</option>`).join('');
-  $('#pSel').innerHTML='<option value="">⬡ mock (no keys)</option>'+
-    p.map(x=>`<option value="${x.key}" ${x.available?'':'disabled'}>${esc(x.label)}${x.available?'':' · no key'}</option>`).join('');
+/* ===== lineage (robot colours / monograms — original emblems) ===== */
+const LIN={
+  openai:{body:'#10b981',trim:'#7df5c8',mono:'G'}, qwen:{body:'#9b6cff',trim:'#cbb0ff',mono:'Q'},
+  zai:{body:'#39c5ff',trim:'#aee6ff',mono:'Z'}, mistral:{body:'#ff7a2f',trim:'#ffc199',mono:'M'},
+  microsoft:{body:'#7bd64a',trim:'#cdf2ad',mono:'φ'}, meta:{body:'#4f8cff',trim:'#aecbff',mono:'L'},
+  anthropic:{body:'#d98a4f',trim:'#ffcf99',mono:'A'}, nvidia:{body:'#76d800',trim:'#c4f78a',mono:'N'},
+  sketchy:{body:'#ff4d5e',trim:'#ff9aa3',mono:'!'},
+};
+const lin=v=>LIN[v]||{body:'#6fd0ef',trim:'#bdeccf',mono:'?'};
+function robot(vendor,pose='idle',scale=1){
+  const c=lin(vendor);
+  return `<div class="bot bot-${pose}" style="--bd:${c.body};--tr:${c.trim};transform:scale(${scale})">
+    <span class="bot-ant"></span><span class="bot-head"></span>
+    <span class="bot-visor"><i></i><i></i></span>
+    <span class="bot-arm l"></span><span class="bot-arm r"></span>
+    <span class="bot-body">${esc(c.mono)}</span>
+    <span class="bot-leg l"></span><span class="bot-leg r"></span></div>`;
 }
-$('#launch').onclick=async()=>{const b=$('#launch');b.disabled=true;b.textContent='◌ LAUNCHING';
-  try{const r=await J('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({mission:$('#mSel').value,preset:$('#pSel').value||null,scenario:$('#sSel').value})});
-    runId=r.run_id;location.hash=runId;lastSig=null;gKey=null;twKey=null;await loadRuns();$('#runsel').value=runId;tick();
-  }catch(e){alert('launch failed: '+e.message);} b.disabled=false;b.textContent='▶ RUN MISSION';};
+const TIER_OF=p=>p==='deep'?'deep':p==='standard'?'standard':p==='lexical'?'lexical':'deep';
 
-async function loadRuns(){const runs=await J('/api/runs');
-  $('#runsel').innerHTML=runs.map(r=>`<option value="${r.run_id}">${esc(r.run_id)} · ${esc(r.status)}</option>`).join('');
-  if(!runs.length){runId=null;return;}
-  const h=location.hash.slice(1);
-  runId=(h&&runs.find(r=>r.run_id===h))?h:(runId&&runs.find(r=>r.run_id===runId)?runId:runs[0].run_id);
-  $('#runsel').value=runId;location.hash=runId;}
+/* ===== digital rain ===== */
+(function rain(){
+  const cv=$('#rain'),cx=cv.getContext('2d');let W,H,cols,drops,last=0;
+  const glyphs='アカサタナハマヤラワ0123456789{}[]<>/\\=+*ABCDEF';
+  function size(){W=cv.width=innerWidth;H=cv.height=innerHeight;cols=Math.floor(W/14);drops=Array(cols).fill(0).map(()=>Math.random()*-50);}
+  size();addEventListener('resize',size);
+  function frame(t){requestAnimationFrame(frame);if(t-last<55)return;last=t;
+    cx.fillStyle='rgba(4,7,6,.2)';cx.fillRect(0,0,W,H);cx.font='13px monospace';
+    for(let i=0;i<cols;i++){const ch=glyphs[Math.floor(Math.random()*glyphs.length)];
+      cx.fillStyle=Math.random()<.04?'#aef7cf':'#1c9560';cx.fillText(ch,i*14,drops[i]*14);
+      if(drops[i]*14>H&&Math.random()>.975)drops[i]=0;drops[i]++;}}
+  requestAnimationFrame(frame);
+})();
 
-async function tick(){if(!runId)return;
-  try{const d=await J('/api/runs/'+runId);setConn(true);
-    try{sessionStats=await J('/api/attack-stats');}catch(e){}
-    const last=d.timeline[d.timeline.length-1];
-    const ss=sessionStats?[sessionStats.attacks,sessionStats.survived,sessionStats.agents_refused].join(','):'';
-    const sig=[d.run_id,d.timeline.length,last?last.seq:0,d.status,d.taken_down,ss].join('|');
-    if(sig!==lastSig){lastSig=sig;cache=d;renderStats(d);renderActive();}
-  }catch(e){setConn(false);}}
-
-function renderStats(d){
-  const sd=d.status.includes('posted')?'go':d.status==='halted'?'no':d.status.includes('awaiting')?'hold':'run';
-  $('#stats').innerHTML=
-    tile('Status',`<span class="statusdot sd-${sd}"></span>${esc(d.status.toUpperCase())}`,sd==='no'?'no':sd==='hold'?'hold':'go','glass')+
-    tile('Mission',esc(d.mission),'cy','glass')+
-    tile('Agents certified',d.agents_certified,'cy','glass')+
-    tile('Alarms',(d.alarms||[]).length,(d.alarms||[]).length?'no':'go','glass')+
-    attackTile(sessionStats)+
-    costTile(d.cost)+
-    (d.rehearsal_proof?tile('Rehearsal','🔒 egress '+esc(d.rehearsal_proof.egress),'cy','glass'):'');
-  const ap=$('#apill'),n=(d.alarms||[]).length;ap.hidden=!n;ap.textContent=n;
-  ap.className='pill'+((d.alarms||[]).some(a=>a.severity==='critical')?' crit':'');
-  renderRail(d);
-}
-function tile(k,v,cls,extra){return `<div class="tile ${extra}"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div></div>`;}
-function attackTile(s){if(!s||!s.attacks)return '';
-  return `<div class="tile glass" title="Adversarial probes fired at agents across this whole session"><div class="k">Attacks survived</div>
-    <div class="v go">${s.survived}/${s.attacks}</div>
-    <div class="costsub2">${s.agents_refused} agent${s.agents_refused===1?'':'s'} refused${s.breaches?' · '+s.breaches+' breach'+(s.breaches===1?'':'es'):''}</div></div>`;}
-function costTile(c){if(!c||!c.present)return '';
-  const usd=(c.estimated_cost_usd||0),s=(c.wall_clock_s||0),t=(c.total_tokens||0);
-  const v=`$${usd.toFixed(4)} <span class="costsub">~est</span>`;
-  const sub=`${s}s · ${t.toLocaleString()} tok`;
-  return `<div class="tile glass" title="${esc(c.price_basis||'')}"><div class="k">Cost / latency</div>
-    <div class="v cy">${v}</div><div class="costsub2">${sub}</div></div>`;}
-
-// Trust lifecycle: ADMISSION -> REHEARSAL -> ACTION, always visible.
-function lifecycle(d){
-  const ev=d.timeline||[], al=(d.alarms||[]).map(a=>a.type);
-  const any=(f)=>ev.some(f);
-  const certFail=al.includes('CERTIFICATION_FAILED');
-  const researchDone=any(e=>e.kind==='stage'&&e.stage==='research'&&e.name==='pass');
-  const admissionStarted=any(e=>e.kind==='attack'||e.kind==='certificate');
-  const admission= certFail?'fail': researchDone?'done': admissionStarted?'active':'idle';
-  const rehStarted=any(e=>e.stage==='rehearsal');
-  const rehDone=any(e=>e.kind==='stage'&&e.stage==='rehearsal'&&e.name==='pass');
-  const rehFail=(d.halted&&rehStarted&&!rehDone)|| (d.panel&&d.panel.eligible===false);
-  const rehearsal= rehDone?'done': rehFail?'fail': rehStarted?'active':'idle';
-  const action= d.posted?'done': d.awaiting?'active': (rehDone?'active':'idle');
-  return [['ADMISSION',admission],['REHEARSAL',rehearsal],['ACTION',action]];
-}
-function renderRail(d){
-  const ph=lifecycle(d), ico={done:'✓',active:'●',fail:'!',idle:'○'};
-  $('#rail').innerHTML=ph.map((p,i)=>{
-    const conn=i<2?`<div class="rconn ${p[1]==='done'?'lit':''}"></div>`:'';
-    return `<div class="phase ${p[1]}"><span class="pdot">${ico[p[1]]}</span>${p[0]}</div>${conn}`;
+/* ===== header stepper ===== */
+function stepIndex(p){return PHASES.indexOf(p);}
+function renderStepper(){
+  const cur=stepIndex(phase), fail=failAt?stepIndex(failAt):-1;
+  $('#stepper').innerHTML=PHASES.map((p,i)=>{
+    let cls='step';
+    if(failAt&&p===failAt)cls+=' fail';
+    else if(i===cur&&!failAt)cls+=' active';
+    else if(i<cur)cls+=' done';
+    if(failAt&&i>fail)cls+=' dim';
+    const pre=(failAt&&p===failAt)?'✗ ':'';
+    return `<span class="${cls}" data-p="${p}"><span class="dot"></span>${pre}${STEP_LABELS[p]}</span>`
+      +(i<PHASES.length-1?'<span class="sep">›</span>':'');
   }).join('');
+  $$('.step.done').forEach(el=>el.onclick=()=>{ if(played.has(el.dataset.p)||el.dataset.p==='select') setPhase(el.dataset.p); });
 }
-function renderActive(){({mission:renderMission,intel:renderIntel,gauntlet:renderGauntlet,broadcast:renderBroadcast,alarms:renderAlarms}[active])(cache);}
-
-/* ---------- MISSION ---------- */
-function renderMission(d){
-  const ss={};d.timeline.forEach(r=>{if(r.kind==='stage'){if(r.name==='start')ss[r.stage]=ss[r.stage]||'active';if(r.name==='pass')ss[r.stage]='done';}});
-  if(d.status==='halted')for(const k in ss)if(ss[k]==='active')ss[k]='fail';
-  const stages=[['research','RESEARCH'],['write','WRITE'],['rehearsal','REHEARSAL'],['action','ACTION']];
-  const flow=stages.map((s,i)=>{const st=ss[s[0]]||'';return `<div class="fnode ${st}"><div class="k">${s[1]}</div>
-    <div class="s">${st==='done'?'GO':st==='active'?'···':st==='fail'?'NO-GO':'—'}</div></div>`+
-    (i<stages.length-1?'<div class="conn-l"></div>':'');}).join('');
-  const tone={go:'go',nogo:'no',crit:'no',high:'no',held:'hold',med:'hold',accent:'cy',muted:'mut'};
-  const want=r=>tfilter==='all'||(tfilter==='alarms'&&r.kind==='alarm')||(tfilter==='gates'&&['gate','attack','certificate','panel','verdict'].includes(r.kind))||(tfilter==='checks'&&r.kind==='check');
-  // STREAM new rows in as they arrive (and on first view) -- fast, capped stagger.
-  const prevSeq=mSeq[d.run_id]||0; let k=0;
-  const lines=d.timeline.filter(want).map(r=>{
-    const isNew=r.seq>prevSeq;
-    const cls='ln '+((r.tone==='nogo'||r.tone==='crit')?'bad ':'')+(isNew?'stream':'');
-    const dly=isNew?` style="animation-delay:${Math.min(k++,14)*0.03}s"`:'';
-    return `<div class="${cls}"${dly}>
-    <span class="tm">${tm(r.ts)}</span><span class="sg">${esc(r.stage)}</span>
-    <span class="bdg b-${tone[r.tone]||'mut'}">${esc(r.status)}</span>
-    <span>${esc(r.text)}${r.meta?`<div class="mt">${esc(r.meta)}</div>`:''}</span></div>`;}).join('');
-  mSeq[d.run_id]=d.timeline.length?d.timeline[d.timeline.length-1].seq:0;
-  const lg=d.learned_guidance||[];
-  const lgbox=lg.length?`<div class="glass pad lgbox" style="margin-bottom:16px">
-    <h3>📌 Standing guardrails <span class="lgtag">human-declared · not training</span></h3>
-    <div class="lgsub">Saved by a reviewer holding a post. The writer is told to follow these on every run; they edit the rulebook, not the model.</div>
-    ${lg.map(g=>`<div class="lgrule">▸ ${esc(g)}</div>`).join('')}</div>`:'';
-  $('#mission').innerHTML=`<div class="glass pad" style="margin-bottom:16px"><div class="flow">${flow}</div></div>
-    ${lgbox}
-    <div class="glass pad"><h3>Flight log</h3>
-    <div class="filters">${['all','alarms','gates','checks'].map(f=>`<span class="chip ${tfilter===f?'on':''}" data-f="${f}">${f}</span>`).join('')}</div>
-    <div class="console">${lines||'<div class="empty">no events</div>'}</div></div>`;
-  $('#mission').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{tfilter=c.dataset.f;renderMission(cache);});
-  const con=$('#mission .console');if(con)con.scrollTop=con.scrollHeight;
+function setAgentChip(){
+  const c=$('#agentChip');
+  if(sel.label){c.hidden=false;c.innerHTML=`agent: <b>${esc(sel.label)}</b>`;}else c.hidden=true;
 }
 
-/* ---------- INTEL ---------- */
-function highlight(text,flags){let h=esc(text);(flags||[]).forEach(f=>{if(!f.span)return;
-  const s=esc(f.span);h=h.split(s).join(`<mark title="${esc(f.check)}: ${esc(f.reason)}">${s}</mark>`);});return h;}
-function renderIntel(d){
-  const r=d.research;
-  const facts=r?Object.entries(r.facts||{}).map(([k,v])=>`<div class="src">
-      <div class="fav">${esc(k.toUpperCase())}</div><div><div class="id">${esc(k)} · cited as [${esc(k)}]</div>
-      <div class="tx">${esc(v)}</div>${(r.sources||{})[k]?`<a class="dom" href="${esc(r.sources[k])}" target="_blank">🔗 ${esc(domainOf(r.sources[k]))}</a>`:'<span class="dom">model knowledge</span>'}</div></div>`).join(''):'';
-  const research=r?`<div class="searchbar"><span class="mag">🔎</span><span class="q">${esc(r.query||r.topic||'')}</span><span class="eng">${esc(r.engine||'model')}</span></div>
-    <h3>Where it looked — ${Object.keys(r.facts||{}).length} sources</h3>${facts||'<div class="empty">no facts</div>'}`:'<div class="empty">No research recorded yet.</div>';
-  const drafts=(d.drafts||[]).map(dr=>`<div class="draft">
-      <div class="dh"><span class="att">Draft #${dr.attempt}</span><span class="who">${esc(dr.worker||'')}</span>
-        <span class="verd ${dr.ok?'ok':'no'}">${dr.ok?'✓ passed checks':'✗ flagged'}</span></div>
-      <div class="body">${highlight(dr.text,dr.flags)}</div>
-      ${(dr.flags||[]).length?`<div class="flagrow">${dr.flags.map(f=>`<div class="fl"><b>${esc(f.check)}</b> — ${esc(f.reason)}${f.span?`: “${esc(f.span)}”`:''}</div>`).join('')}</div>`:''}
-    </div>`).join('')||'<div class="empty">No drafts yet.</div>';
-  // REVISION DIFFS: behaviour-change-on-feedback, made visible.
-  const revs=(d.revisions||[]).map(rv=>{
-    const diff=(rv.ops||[]).map(o=>o.t==='eq'?esc(o.text):o.t==='del'?`<del>${esc(o.text)}</del>`:`<ins>${esc(o.text)}</ins>`).join(' ');
-    const fb=(rv.feedback||[]).map(f=>`<span class="fbchip">${esc(f.check)}${f.span?`: “${esc((f.span||'').slice(0,46))}”`:''}</span>`).join('');
-    return `<div class="rev"><div class="rh">Draft #${rv.from} → #${rv.to} · <span class="rstage">${esc(rv.stage)}</span></div>
-      ${fb?`<div class="fbline">feedback that forced the rewrite: ${fb}</div>`:''}
-      <div class="diff">${diff}</div></div>`;}).join('');
-  $('#intel').innerHTML=`<div class="cols">
-    <div class="glass pad"><h3>What it searched</h3>${research}</div>
-    <div class="glass pad"><h3>What the model wrote — and where it got flagged</h3>${drafts}</div></div>`+
-    (revs?`<div class="glass pad" style="margin-top:16px"><h3>How it changed on feedback — revision diff</h3>${revs}</div>`:'');
+/* ===== console (mounted once; append by seq) ===== */
+const toneClass=t=>({go:'c-go',pass:'c-go',nogo:'c-no',crit:'c-no',breach:'c-no',refused:'c-no',high:'c-high',
+  held:'c-held',med:'c-held',await:'c-held',accent:'c-cyan',info:'c-cyan'}[t]||'c-mut');
+function pushConsole(timeline){
+  const body=$('#dockBody');
+  if(!timeline||!timeline.length)return;
+  if(seenSeq.size===0)body.innerHTML='';
+  if(t0==null&&timeline[0])t0=timeline[0].ts;
+  let added=0;
+  timeline.forEach(r=>{
+    if(seenSeq.has(r.seq))return;seenSeq.add(r.seq);added++;
+    const rel=(t0!=null&&r.ts!=null)?'+'+(r.ts-t0).toFixed(1)+'s':'';
+    const bad=(r.tone==='nogo'||r.tone==='crit'||r.tone==='breach'||r.tone==='refused');
+    const row=document.createElement('div');row.className='logrow'+(bad?' bad':'');
+    row.innerHTML=`<span class="t">${esc(rel)}</span><span class="sg">${esc(r.stage||'')}</span>`
+      +`<span class="bd ${toneClass(r.tone)}">${esc((r.status||'').toUpperCase())}</span>`
+      +`<span class="tx">${esc(r.text||'')}${r.meta?`<div class="mt">↳ ${esc(r.meta)}</div>`:''}</span>`;
+    body.appendChild(row);
+  });
+  if(added){$('#dockN').textContent=seenSeq.size+' events';body.scrollTop=body.scrollHeight;}
+}
+function dockCost(){
+  const c=(view&&view.cost)||null;if(!c||!c.present){$('#dockCost').textContent='';return;}
+  $('#dockCost').textContent=`Σ ${(c.total_tokens||0).toLocaleString()} tok · $${(c.estimated_cost_usd||0).toFixed(4)} · ${c.wall_clock_s||0}s`;
+}
+$('#dockBar').onclick=()=>{$('#dock').classList.toggle('collapsed');
+  $('#dockCaret').textContent=$('#dock').classList.contains('collapsed')?'▲':'▼';};
+
+/* ===== auto-advance ===== */
+function cancelAuto(){if(autoTimer){clearInterval(autoTimer);autoTimer=null;}}
+function startAuto(sec,fn,btnSel,label){
+  cancelAuto();let n=sec;const b=btnSel?$(btnSel):null;
+  const paint=()=>{if(b)b.textContent=`${label} · ${n}s`;};paint();
+  autoTimer=setInterval(()=>{n--;paint();if(n<=0){cancelAuto();fn();}},1000);
 }
 
-/* ---------- GAUNTLET ---------- */
-function renderGauntlet(d){
-  const g=d.gauntlet||[];
-  if(!g.length){$('#gauntlet').innerHTML='<div class="glass empty">No admission runs yet — launch a mission above.</div>';return;}
-  const s=sessionStats||{};
-  const sb=s.attacks?`<div class="scoreboard glass">
-    <div class="sbi"><div class="sbn">${s.attacks}</div><div class="sbl">attacks run</div></div>
-    <div class="sbi"><div class="sbn go">${s.survived}</div><div class="sbl">survived</div></div>
-    <div class="sbi"><div class="sbn ${s.breaches?'no':''}">${s.breaches}</div><div class="sbl">breaches</div></div>
-    <div class="sbi"><div class="sbn">${s.agents_refused}</div><div class="sbl">agents refused</div></div>
-    <div class="sbi"><div class="sbn cy">${s.survival_rate!=null?Math.round(s.survival_rate*100)+'%':'—'}</div><div class="sbl">survival rate</div></div>
-    <div class="sbnote">session-wide · every adversarial probe ever fired in this dashboard</div></div>`:'';
-  $('#gauntlet').innerHTML=sb+`<div class="gintro">⚔ <b>THE PROVING GROUND</b> — every agent must survive the gauntlet to be trusted.
-    Each lane is a real model; each obstacle a real attack class. The agent runs · swims · cycles the course and
-    <b style="color:var(--no)">trips on a real canary leak</b>; survive all of it and it earns a <b style="color:var(--gold)">gold medal</b>.
-    <span class="rp" id="rp">↻ replay</span></div>`+
-    g.map((a,gi)=>{const v=vendorOf(a.agent);
-      const segs=a.attacks.map((x,i)=>{const dz=DISC[i%DISC.length];return `<div class="seg d-${dz[0]}">
-        <span class="disc">${dz[1]}</span><span class="mk">${x.survived?'✅':'💥'}</span><span class="lbl">${esc(x.attack)}</span></div>`;}).join('');
-      const leaks=a.attacks.filter(x=>!x.survived&&x.leaked).map(x=>`<div class="lk">💥 <b>${esc(x.attack)}</b> → ${esc(x.leaked)}</div>`).join('');
-      return `<div class="track" data-gi="${gi}">
-        <div class="th"><div class="av0 av ${v}">${esc(initials(a.agent))}</div>
-          <div><div class="nm">${esc(a.agent)}</div><div class="vd">${v||'agent'} · policy ${esc(a.policy||'')}</div></div>
-          <span class="stamp ${a.certified?'ok':'no'}">${a.certified?'🥇 CERTIFIED':'⛔ REFUSED'}</span></div>
-        <div class="course"><div class="segs" style="display:contents">${segs}</div><div class="ground"></div><div class="finish"></div>
-          <div class="runner">🤖</div><div class="medal">🥇</div><div class="certstamp">CERTIFIED</div></div>
-        ${leaks?`<div class="leakrow">${leaks}</div>`:''}</div>`;}).join('');
-  $('#rp').onclick=()=>{gKey=null;runGauntlet(d);};
-  if(gKey!==d.run_id){gKey=d.run_id;runGauntlet(d);}else $('#gauntlet').querySelectorAll('.track').forEach((t,i)=>finalGauntlet(t,d.gauntlet[i]));
-}
-function finalGauntlet(t,a){const segs=[...t.querySelectorAll('.seg')];const fall=a.attacks.findIndex(x=>!x.survived);
-  segs.forEach((s,i)=>{if(fall<0||i<fall)s.classList.add('cleared');if(i===fall)s.classList.add('fell');});
-  const rn=t.querySelector('.runner'),stop=fall<0?segs.length-1:fall;
-  rn.style.left=`calc(${(stop+0.5)/segs.length*100}% - 15px)`;
-  if(fall>=0){rn.classList.add('tripped');rn.textContent='🤕';}else{t.querySelector('.medal').classList.add('show');t.querySelector('.certstamp').classList.add('slam');}}
-async function runGauntlet(d){
-  const tracks=[...$('#gauntlet').querySelectorAll('.track')];
-  for(let gi=0;gi<tracks.length;gi++){const a=d.gauntlet[gi],t=tracks[gi],segs=[...t.querySelectorAll('.seg')];
-    const rn=t.querySelector('.runner');rn.classList.remove('tripped');rn.textContent='🤖';rn.style.left='-6px';
-    segs.forEach(s=>s.classList.remove('cleared','fell'));t.querySelector('.medal').classList.remove('show');
-    const cs=t.querySelector('.certstamp');cs.classList.remove('slam');
-    await sleep(140);
-    let fell=false;
-    for(let i=0;i<segs.length;i++){const dz=DISC[i%DISC.length];rn.textContent={run:'🏃',swim:'🏊',cycle:'🚴',climb:'🧗',vault:'🤸'}[dz[0]];
-      rn.style.left=`calc(${(i+0.5)/segs.length*100}% - 15px)`;await sleep(720);
-      if(!a.attacks[i].survived){rn.textContent='🤕';rn.classList.add('tripped');segs[i].classList.add('fell');fell=true;break;}
-      segs[i].classList.add('cleared');}
-    if(!fell&&a.certified){rn.textContent='🏆';rn.style.left='calc(100% - 40px)';await sleep(380);
-      t.querySelector('.medal').classList.add('show');cs.classList.add('slam');
-      const rect=t.getBoundingClientRect();confetti(rect.left+rect.width/2,rect.top+70);}
-    await sleep(300);}
+/* ===== phase router ===== */
+function setPhase(p){cancelAuto();phase=p;renderStepper();render();advance();}
+function render(){
+  renderStepper();setAgentChip();
+  const fns={select:renderSelect,gauntlet:renderGauntlet,write:renderWrite,rehearsal:renderRehearsal,approval:renderApproval};
+  (fns[phase]||renderSelect)();
 }
 
-/* ---------- BROADCAST ---------- */
-function renderBroadcast(d){
-  const spans=((d.panel||{}).held_spans)||[];
-  const pp=d.post||{};
-  // THE CLIMAX: a content HOLD -> freeze the post, stamp HELD, highlight the lie.
-  if(spans.length && pp.present){
-    let body=esc(pp.text);
-    spans.forEach(h=>{ if(h.span){const s=esc(h.span); if(body.includes(s)) body=body.split(s).join(`<mark class="lie">${s}</mark>`);} });
-    const brand2=(d.mission||'').split('—')[0].trim()||'Brand';
-    const why=spans.map(h=>`<div class="heldreason"><b>${esc(h.criterion)}</b> — flagged by ${esc(h.judge)} (${esc(h.tier)}): ${esc(h.reason)}</div>`).join('');
-    $('#broadcast').innerHTML=`<div class="xwrap">
-      <div class="heldbanner">⏸ HELD BY THE REVIEW PANEL — THIS POST NEVER REACHED X</div>
-      <div class="xcard glass frozen"><div class="xtop"><div class="xrow"><div class="av ${vendorOf(brand2)}">${esc(initials(brand2))}</div>
-        <div style="flex:1"><div class="who2"><span class="dn">${esc(brand2)}</span><span class="vf">✔</span><span class="hd">${esc(pp.author||'@brand')}</span></div>
-        <div class="xbody big">${body}</div></div></div></div>
-      <div class="heldwhy">${why}</div>${corrBoxHTML()}</div>`;
-    wireCorrBox();
-    return;
+/* ===== readiness gates ===== */
+const gReady=()=>view&&view.gauntlet&&view.gauntlet.length>0;
+const wReady=()=>view&&view.drafts&&view.drafts.length>0;
+const rReady=()=>view&&view.panel&&view.panel.present;
+const aReady=()=>view&&(view.awaiting||view.posted||view.halted);
+function advance(){
+  if(phase==='gauntlet'&&!played.has('gauntlet')&&gReady()){played.add('gauntlet');playGauntlet();}
+  else if(phase==='write'&&!played.has('write')&&wReady()){played.add('write');playWrite();}
+  else if(phase==='rehearsal'&&!played.has('rehearsal')&&rReady()){played.add('rehearsal');playRehearsal();}
+  else if(phase==='approval'&&!played.has('approval')&&aReady()){played.add('approval');playApproval();}
+}
+
+/* ===== poll ===== */
+async function tick(){
+  if(!runId)return;
+  try{
+    view=await J('/api/runs/'+runId);
+    pushConsole(view.timeline||[]);dockCost();
+    try{session=await J('/api/attack-stats');}catch(e){}
+    advance();
+  }catch(e){/* transient */}
+}
+
+/* ===== launch ===== */
+async function launch(){
+  cancelAuto();played.clear();seenSeq.clear();t0=null;failAt=null;critiques=[];
+  $('#dockBody').innerHTML='<div class="empty-log cur">launching… </div>';
+  const sketchy=sel.model==='sketchy';
+  const picked=sketchy?null:presets.find(p=>p.key===sel.model);
+  const realOK=!!(picked&&picked.available);
+  const scenario=sketchy?'reject':(sel.inject==='held'?'block':sel.inject==='faulty'?'faulty':'full');
+  const body={mission:sel.mission, preset:realOK?sel.model:null, scenario, human_gate:sel.human};
+  const r=await J('/api/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  runId=r.run_id;
+  setPhase('gauntlet');
+  if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(tick,1200);tick();
+}
+
+/* ===== SELECT ===== */
+const DISPLAY=['gptoss120','qwen3','glm','mixtral','phi4','llama4','claude'];
+function modelCards(){
+  const out=[];
+  DISPLAY.forEach(k=>{const p=presets.find(x=>x.key===k);if(p)out.push(p);});
+  out.push({key:'sketchy',label:'SketchyAgent v0',vendor:'sketchy',model:'sketchy-agent-v0',profile:'untrust'});
+  return out;
+}
+function renderSelect(){
+  const cards=modelCards();
+  const s=session||{};
+  const sessStrip=s.attacks?`<div class="sess-strip">session proving ground · <b>${s.survived}/${s.attacks}</b> attacks survived · ${s.agents_refused} agent${s.agents_refused===1?'':'s'} refused</div>`:'';
+  $('#stage').innerHTML=`<div class="wrap" style="animation:fadein .3s">
+    <h1 class="h-arc" style="font-size:17px;margin:0 0 6px">SELECT AGENT</h1>
+    <p class="sub">Pick the model that will research, write and ship the post. Before it touches the pipeline it must survive the <b style="color:var(--go)">Admission Gauntlet</b> — trust is earned, not assumed.</p>
+    ${sessStrip}
+    <div class="mgrid">${cards.map(card).join('')}</div>
+    <div class="field-lbl">What should this post be about?</div>
+    <input class="tinput" id="topic" value="${esc(sel.topic)}">
+    <div class="chip-row" style="margin-top:10px">${['Lumora sleep launch','Giving Tuesday','Essence restock','Sleep tips thread'].map(c=>`<span class="qchip" data-q="${esc(c)}">${esc(c)}</span>`).join('')}</div>
+    <div class="ctrls">
+      <div><div class="field-lbl" style="margin:0 0 6px">demo inject (optional)</div>
+        <div class="seg" id="seg">${[['none','none'],['held','medical claim'],['faulty','faulty judge']].map(([k,l])=>`<button data-k="${k}" class="${sel.inject===k?'on':''}">${l}</button>`).join('')}</div></div>
+      <div><div class="field-lbl" style="margin:0 0 6px">human approval</div>
+        <div class="toggle"><div class="tk ${sel.human?'on':''}" id="tk"><div class="knob"></div></div>
+          <span class="tlabel">${sel.human?'ON · asks you first':'OFF · auto-posts'}</span></div></div>
+      <button class="btn go arc" id="run" style="margin-left:auto" ${sel.model?'':'disabled'}>▶ RUN GAUNTLET</button>
+    </div>
+    <div class="hint">${hintFor()}</div>
+  </div>`;
+  // wire
+  $$('.mcard').forEach(el=>el.onclick=()=>{const c=cards.find(x=>x.key===el.dataset.k);
+    sel.model=c.key;sel.vendor=c.vendor;sel.label=c.label;render();});
+  $$('.qchip').forEach(el=>el.onclick=()=>{sel.topic=el.dataset.q;$('#topic').value=el.dataset.q;});
+  $('#topic').oninput=e=>sel.topic=e.target.value;
+  $$('#seg button').forEach(b=>b.onclick=()=>{sel.inject=b.dataset.k;render();});
+  $('#tk').onclick=()=>{sel.human=!sel.human;render();};
+  const rb=$('#run');if(rb)rb.onclick=()=>{if(sel.model)launch();};
+}
+function card(c){
+  const tier=c.profile==='untrust'?'untrust':TIER_OF(c.profile);
+  const seld=sel.model===c.key?('sel'+(c.key==='sketchy'?' unt':'')):'';
+  return `<div class="mcard ${seld}" data-k="${c.key}">
+    <div style="height:48px;display:flex;align-items:flex-end">${robot(c.vendor,'idle')}</div>
+    <div class="nm">${esc(c.label)}</div>
+    <span class="tier ${tier}">${tier==='untrust'?'untrusted':c.profile}</span>
+    <div class="id">${esc(c.model)}</div></div>`;
+}
+function hintFor(){
+  if(sel.model==='sketchy')return '⚠ SketchyAgent v0 is untrusted — watch it fail the gauntlet and get refused.';
+  if(sel.inject==='held')return '⚠ a medical claim will be injected — watch the rehearsal panel HOLD it.';
+  if(sel.inject==='faulty')return '⚠ a faulty judge will hallucinate a citation — watch meta_check catch it.';
+  if(!sel.human)return 'human approval OFF: on unanimous consent it will auto-post (dry-run).';
+  return 'clean run — it will stop for your approval before posting.';
+}
+
+/* ===== GAUNTLET (simple data panel — upgraded in Step 4) ===== */
+function gauntletCert(){
+  const g=(view&&view.gauntlet)||[];
+  return g.find(c=>!c.certified)||g.find(c=>/writer|research/i.test(c.agent))||g[0]||null;
+}
+function renderGauntlet(){
+  $('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:14px">ADMISSION GAUNTLET</h1>
+    <p class="sub">${esc(sel.label||'')} is running the 5-event attack course…</p>
+    <div id="gres" style="margin-top:18px">${robot(sel.vendor,'run',1.4)}</div></div>`;
+}
+function playGauntlet(){
+  const cert=gauntletCert();if(!cert)return;
+  const certified=cert.certified;
+  const rows=(cert.attacks||[]).map(a=>`<div class="glass" style="display:flex;gap:10px;align-items:center;margin:6px 0;border-color:${a.survived?'rgba(53,255,158,.3)':'rgba(255,84,102,.4)'}">
+    <span style="font-size:18px">${a.survived?'✅':'💥'}</span>
+    <b style="font-family:var(--mono);font-size:12px">${esc(a.attack)}</b>
+    <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${a.survived?'var(--go)':'var(--no)'}">${a.survived?'survived':'BREACH — '+esc(a.leaked||'')}</span></div>`).join('');
+  const banner=certified
+    ?`<div class="h-arc" style="font-size:14px;margin:10px 0">🏆 MODEL VERIFIED</div>
+       <div class="glass" style="border-color:rgba(255,210,74,.4)">CERTIFICATE OF TRUST · ${esc(sel.label)} · ${(cert.attacks||[]).length}/${(cert.attacks||[]).length} cleared · policy all_survived · canary ${esc((cert.canary||'a3f97c2e')+'')} never leaked</div>
+       <button class="btn go arc" id="gnext" style="margin-top:16px">▶ START MISSION</button>`
+    :`<div class="h-arc" style="font-size:14px;color:var(--no);margin:10px 0">GAME OVER — BREACH</div>
+       <button class="btn red" id="gretry" style="margin-top:16px">↻ PICK ANOTHER AGENT</button>`;
+  $('#gres').innerHTML=rows+banner;
+  if(certified){startAuto(3,()=>setPhase('write'),'#gnext','▶ START MISSION');}
+  else{failAt='gauntlet';renderStepper();const b=$('#gretry');if(b)b.onclick=()=>{stopRun();setPhase('select');};}
+}
+
+/* ===== WRITE (simple — upgraded in Step 5) ===== */
+function renderWrite(){$('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">MISSION · research → write</h1>
+  <p class="sub">the agent is searching and drafting…</p></div>`;}
+function playWrite(){
+  const r=view.research||{};const facts=r.facts||{};const src=r.sources||{};
+  const drafts=(view.drafts||[]).filter(d=>d.stage==='write');
+  const fcards=Object.keys(facts).map(id=>`<div class="glass" style="margin:6px 0"><b style="color:var(--go);font-family:var(--mono)">[${esc(id)}]</b> ${esc(facts[id])} ${src[id]?`<a style="color:var(--cyan);font-size:11px" href="https://${esc(src[id])}" target="_blank">🔗 ${esc(src[id])}</a>`:''}</div>`).join('');
+  const dcards=drafts.map(d=>{
+    let body=esc(d.text);(d.flags||[]).forEach(f=>{if(f.span){const s=esc(f.span);if(body.includes(s))body=body.split(s).join(`<mark style="background:rgba(255,84,102,.25);border-bottom:2px solid var(--no);color:#fff">${s}</mark>`);}});
+    const fl=(d.flags||[]).map(f=>`<div style="font-family:var(--mono);font-size:11px;color:var(--no);border-left:2px solid var(--no);padding-left:8px;margin:3px 0">${esc(f.check)} — ${esc(f.reason)} ${f.span?`"${esc(f.span)}"`:''}</div>`).join('');
+    return `<div class="glass" style="margin:8px 0"><div style="font-family:var(--mono);font-size:11px;color:var(--faint)">Draft #${d.attempt} · ${d.ok?'<span style="color:var(--go)">✓ passed checks</span>':'<span style="color:var(--no)">✗ flagged</span>'}</div>
+      <div style="margin:6px 0;font-size:15px">${body}</div>${fl}</div>`;
+  }).join('');
+  $('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">MISSION · Lumora Sleep — Launch Post</h1>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px">
+      <div><div class="field-lbl">sources · what it searched</div>${fcards||'<p class="sub">—</p>'}</div>
+      <div><div class="field-lbl">drafts · what it wrote</div>${dcards||'<p class="sub">—</p>'}</div></div>
+    <button class="btn go arc" id="wnext" style="margin-top:16px">▶ REHEARSAL</button></div>`;
+  startAuto(3,()=>setPhase('rehearsal'),'#wnext','▶ REHEARSAL');
+}
+
+/* ===== REHEARSAL (simple — upgraded in Step 6) ===== */
+function renderRehearsal(){$('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">REHEARSAL · the digital twin</h1><p class="sub">the review panel is reading the post…</p></div>`;}
+function playRehearsal(){
+  const p=view.panel||{};const judges=p.judges||[];
+  const post=view.post||{};
+  const eligible=p.eligible;
+  const reps=judges.map(j=>{const tier=TIER_OF(j.profile);
+    return `<div class="glass" style="margin:6px 0;border-color:${j.pass?'rgba(53,255,158,.25)':'rgba(255,84,102,.4)'}">
+      <div style="display:flex;align-items:center;gap:8px">${robot(vendorOfJudge(j.name),'idle',.6)}
+        <b>${esc(j.name)}</b><span class="tier ${tier}">${j.profile}</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${j.pass?'var(--go)':'var(--no)'}">${j.pass?'PASS':'HELD'}</span></div>
+      <div style="margin-top:4px;color:var(--dim);font-size:13px">${esc(j.comment||'')}</div></div>`;}).join('');
+  const banner=eligible?`<div class="glass" style="border-color:rgba(53,255,158,.4);color:var(--go)">✓ UNANIMOUS CONSENT · publish-eligible</div>`
+    :`<div class="glass" style="border-color:rgba(255,180,84,.4);color:var(--held)">❚❚ HELD · the panel flagged it — it never reaches X</div>`;
+  $('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">REHEARSAL · FAKE X SIM — egress disabled</h1>
+    <div class="glass" style="margin:12px 0"><b>${esc(post.author||'@lumorasleep')}</b><div style="font-size:18px;margin-top:6px">${esc(stripCites(post.text||''))}</div></div>
+    ${banner}<div style="margin-top:10px">${reps}</div>
+    ${eligible?'<button class="btn go arc" id="rnext" style="margin-top:14px">▶ FINAL APPROVAL</button>':''}</div>`;
+  if(eligible){startAuto(3,()=>setPhase('approval'),'#rnext','▶ FINAL APPROVAL');}
+  else{failAt='rehearsal';renderStepper();}
+}
+function vendorOfJudge(name){const n=(name||'').toLowerCase();
+  if(n.includes('gpt'))return 'openai';if(n.includes('qwen'))return 'qwen';if(n.includes('glm'))return 'zai';
+  if(n.includes('mixtral')||n.includes('mistral'))return 'mistral';if(n.includes('phi'))return 'microsoft';
+  if(n.includes('llama'))return 'meta';if(n.includes('claude')||n.includes('anthropic'))return 'anthropic';
+  if(n.includes('nemotron')||n.includes('nvidia'))return 'nvidia';return 'openai';}
+
+/* ===== APPROVAL (functional) ===== */
+function renderApproval(){$('#stage').innerHTML=`<div class="wrap" style="max-width:680px"><h1 style="font-size:24px;color:var(--ink-bright);font-family:var(--sans);font-weight:600">Final approval</h1><p class="sub">awaiting…</p></div>`;}
+function playApproval(){
+  const post=view.post||{};const panel=view.panel||{};
+  const eligible=panel.eligible;const judges=panel.judges||[];
+  const approves=judges.filter(j=>j.pass).length;
+  const posted=view.posted;
+  const verdictColor=eligible?'var(--go)':'var(--held)';
+  const payload=`<div class="glass" style="margin:14px 0">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--faint)">${esc(post.author||'@lumorasleep')} · ${stripCites(post.text||'').length}/280</div>
+      <div style="font-size:17px;margin:8px 0">${esc(stripCites(post.text||''))}</div>
+      <div style="display:flex;gap:16px;font-family:var(--mono);font-size:11px;color:var(--faint);border-top:1px solid var(--hair);padding-top:8px">
+        <span>agent ${esc(sel.label||'')}</span><span>egress disabled</span><span>panel ${approves}/${judges.length} approve</span>
+        ${view.cost&&view.cost.present?`<span class="cost" style="color:var(--cyan)">$${(view.cost.estimated_cost_usd||0).toFixed(4)} est</span>`:''}</div></div>`;
+  let action;
+  if(posted){
+    action=postedCard();
+  }else if(view.awaiting){
+    action=`<p class="sub">the panel reached unanimous consent — you may approve.</p>
+      <div style="display:flex;gap:12px;margin-top:10px">
+        <button class="btn go" id="pass" ${eligible?'':'disabled'} style="flex:1">Pass & post</button>
+        <button class="btn red" id="fail" style="flex:1">Fail & revise</button></div>
+      ${eligible?'':'<div class="hint">the harness will not post a held draft. send it back instead.</div>'}
+      <div id="revbox"></div>`;
+  }else{
+    action=`<div class="glass" style="color:var(--held)">❚❚ This run was HELD before Action — there is nothing to approve.</div>`;
   }
-  if(d.halted||!(d.post||{}).present){const a=(d.alarms||[]).find(x=>['CERTIFICATION_FAILED','ESCALATE_HUMAN'].includes(x.type))||(d.alarms||[])[0];
-    $('#broadcast').innerHTML=`<div class="xwrap">${a?`<div class="blocked"><div class="b1">⛔ POST BLOCKED — IT NEVER REACHED X</div>
-      <div class="b2">${esc(a.type)} — ${esc(a.context)}</div><div class="b3">▸ ${esc(a.recommended_action)}</div></div>`:'<div class="empty">No post.</div>'}</div>`;return;}
-  const p=d.post,brand=(d.mission||'').split('—')[0].trim()||'Brand';
-  const body=esc(p.text).replace(/(#[A-Za-z0-9_]+)/g,'<span class="tag">$1</span>');
-  let flag=p.posted?(p.live?'<span class="flag live">● LIVE</span>':'<span class="flag dry">DRY RUN</span>'):'<span class="flag dry">STAGED</span>';
-  if(d.taken_down)flag='<span class="flag down">TAKEN DOWN</span>';
-  const proof=d.rehearsal_proof?`<div class="proof">🔒 Rehearsed with network egress <b>${esc(d.rehearsal_proof.egress)}</b> — ${d.rehearsal_proof.byte_len} bytes, byte-identical to live</div>`:'';
-  const aw=d.awaiting?`<div class="aw"><b>⏸ AWAITING HUMAN APPROVAL</b> — nothing posts (even dry-run) until you approve.</div>`:'';
-  const panel=d.panel||{judges:[]};
-  const consent=panel.present?(panel.eligible?`<span class="consent go">✓ UNANIMOUS CONSENT · publish-eligible</span>`:`<span class="consent hold">⏸ HELD · a judge flagged it</span>`):'';
-  $('#broadcast').innerHTML=`<div class="xwrap">${proof}${aw}
-    <div class="xcard glass"><div class="xtop"><div class="xrow"><div class="av ${vendorOf(brand)}">${esc(initials(brand))}</div>
-      <div style="flex:1"><div class="who2"><span class="dn">${esc(brand)}</span><span class="vf">✔</span><span class="hd">${esc(p.author||'@brand')} · now</span>${flag}</div>
-        <div class="xbody">${body}</div>
-        <div class="xact"><span>💬</span><span>🔁</span><span>♡</span><span>📊</span><span class="cc ${p.within_limit===false?'over':''}">${p.char_count||0}/280</span></div></div></div></div>
-      <div class="rephead">${consent} · replies from the review panel</div><div id="feed"></div></div>
-    <div class="act">${d.awaiting?'<button class="btn run" id="apr">Approve &amp; post (dry-run)</button>':''}
-      ${d.can_takedown?'<button class="btn ghost danger" id="tkd">Take down (rollback)</button>':''}</div>
-    ${d.awaiting?corrBoxHTML():''}</div>`;
-  if(d.awaiting)wireCorrBox();
-  streamReplies(d,panel.judges||[]);
-  const ab=$('#apr');if(ab)ab.onclick=async()=>{ab.disabled=true;ab.textContent='posting…';
-    const j=await(await fetch(API+'/api/runs/'+runId+'/approve',{method:'POST'})).json();
-    if(!j.ok){ab.disabled=false;ab.textContent='Approve & post (dry-run)';alert(j.reason);}else{const xc=$('.xcard');if(xc){const w=xc.getBoundingClientRect();confetti(w.left+w.width/2,w.top+60);}}lastSig=null;twKey=null;tick();};
-  const tb=$('#tkd');if(tb)tb.onclick=async()=>{if(!confirm('Take down (record rollback)?'))return;tb.disabled=true;await fetch(API+'/api/runs/'+runId+'/takedown',{method:'POST'});lastSig=null;tick();};
+  $('#stage').innerHTML=`<div class="wrap" style="max-width:680px">
+    <h1 style="font-size:24px;color:var(--ink-bright);font-weight:600;margin:0">Final approval</h1>
+    <p class="sub">Nothing reaches X without a recorded human decision.</p>
+    <div style="font-family:var(--mono);font-size:12px;color:${verdictColor};margin-top:8px">● ${eligible?'UNANIMOUS CONSENT · publish-eligible':'HELD'}</div>
+    ${payload}${action}</div>`;
+  wireApproval();
 }
-/* ITEM 3: a held/awaiting post lets a human type a correction. It is fed to the
-   writer's revise loop on a fresh run; ticking the checkbox (with a confirm)
-   ALSO saves it as a standing, declared guardrail for the mission. Never a model
-   update -- it edits the rulebook, not the weights. */
-function corrBoxHTML(){return `<div class="correct glass">
-    <div class="ch">✍️ <b>Reviewer correction</b> — tell the writer what to change. This is a declared instruction, not a model update.</div>
-    <textarea id="corr" placeholder="e.g. Too salesy — drop the hype and lead with the 4-week trial result."></textarea>
-    <label class="saveline"><input type="checkbox" id="corrSave"> Save as a standing guardrail for this mission (every future run will follow it)</label>
-    <div class="cbtns"><button class="btn run" id="corrSend">Send correction &amp; re-run</button></div>
-    <div class="chint">Re-runs the mission with your note wired into the writer's revise loop. Saving appends it to this mission's declared guardrails — a rulebook edit, not training.</div></div>`;}
-function wireCorrBox(){const cs=$('#corrSend');if(!cs)return;
-  cs.onclick=async()=>{const t=($('#corr').value||'').trim();if(!t){alert('Type a correction first.');return;}
-    const save=$('#corrSave').checked;
-    if(save && !confirm('Save this as a STANDING guardrail for "'+(cache&&cache.mission||'this mission')+'"?\n\nEvery future run will be told to follow it. This edits the declared rulebook (it does NOT retrain any model).'))return;
-    cs.disabled=true;cs.textContent='re-running…';
-    let j;try{j=await(await fetch(API+'/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correction:t,save:save})})).json();}catch(e){j=null;}
-    if(!j||!j.ok){cs.disabled=false;cs.textContent='Send correction & re-run';alert((j&&j.reason)||'could not submit correction');return;}
-    runId=j.run_id;location.hash=runId;lastSig=null;gKey=null;twKey=null;await loadRuns();$('#runsel').value=runId;tick();};}
-async function streamReplies(d,judges){const feed=$('#feed');if(!feed)return;
-  const key=d.run_id+'|'+judges.length+'|'+d.status;const anim=twKey!==key;twKey=key;feed.innerHTML='';
-  for(const j of judges){const v=vendorOf(j.name);
-    if(anim){const t=document.createElement('div');t.className='typing';t.innerHTML=`<i></i><i></i><i></i> ${esc(j.name)} is replying…`;feed.appendChild(t);await sleep(620);t.remove();}
-    const el=document.createElement('div');el.className='reply'+(j.pass?'':' held');
-    const tier=j.profile||'deep';
-    const covers=(j.covers||[]).length?`<div class="covers">${j.covers.map(c=>`<span class="cc-chip">${esc(c)}</span>`).join('')}</div>`:'';
-    el.innerHTML=`<div class="xrow"><div class="av ${v}">${esc(initials(j.name))}</div><div style="flex:1">
-      <div class="who2"><span class="dn">${esc(j.name)}</span><span class="vf">✔</span><span class="hd">${esc(handleOf(j.name))} · now</span>
-      <span class="tier t-${tier}" title="capability tier">${tier}</span>
-      <span class="verch ${j.pass?'pass':'held'}">${j.pass?'✓ approves':'✗ holds'}</span></div>
-      <div class="xbody">${esc(j.comment||'')}</div>${covers}</div></div>`;
-    feed.appendChild(el);requestAnimationFrame(()=>el.classList.add('in'));if(anim)await sleep(240);else el.classList.add('in');}
+function postedCard(){
+  const post=view.post||{};
+  return `<div class="glass" style="border-color:rgba(53,255,158,.4)">
+    <div style="color:var(--go);font-weight:600">● Posted · dry run</div>
+    <p class="sub" style="margin:6px 0">Approval recorded. The post shipped in dry-run with a takedown armed — nothing was sent to the network.</p>
+    <a class="qchip" style="display:inline-block" href="https://x.com/lumorasleep/status/${esc(post.post_id||'0')}" target="_blank">🔗 x.com/lumorasleep/status/${esc(post.post_id||'0')} (dry-run)</a>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn ghost" id="dlj">⤓ audit.json</button>
+      <button class="btn ghost" id="dlh">⎙ report</button>
+      ${view.can_takedown?'<button class="btn red" id="tkd">Take down (rollback)</button>':''}
+      <button class="btn" id="again" style="margin-left:auto">Run another mission</button></div></div>`;
+}
+function wireApproval(){
+  const pass=$('#pass');if(pass)pass.onclick=async()=>{pass.disabled=true;pass.textContent='posting…';
+    const j=await J('/api/runs/'+runId+'/approve',{method:'POST'});
+    if(!j.ok){pass.disabled=false;pass.textContent='Pass & post';alert(j.reason||'refused');}else{await tick();playApproval();}};
+  const fail=$('#fail');if(fail)fail.onclick=()=>{
+    $('#revbox').innerHTML=`<div class="glass" style="margin-top:12px"><div class="field-lbl" style="margin:0 0 8px">what should the writer change?</div>
+      <textarea class="tinput" id="corr" style="min-height:70px" placeholder="e.g. drop the medical framing, lead with the ritual, keep every stat cited…"></textarea>
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0;font-family:var(--mono);font-size:12px;color:var(--dim)"><input type="checkbox" id="save"> save as a standing guardrail for this mission</label>
+      <div style="display:flex;gap:10px"><button class="btn red" id="logback">Log & send back</button><button class="btn ghost" id="cancel">Cancel</button></div></div>`;
+    $('#cancel').onclick=()=>{$('#revbox').innerHTML='';};
+    $('#logback').onclick=async()=>{const t=$('#corr').value.trim();if(!t){alert('type a correction first');return;}
+      const save=$('#save').checked;
+      if(save&&!confirm('Save as a STANDING guardrail for this mission? Every future run will follow it (rulebook edit, not training).'))return;
+      const lb=$('#logback');lb.disabled=true;lb.textContent='re-running…';
+      const j=await J('/api/runs/'+runId+'/reject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correction:t,save})});
+      if(!j||!j.ok){lb.disabled=false;lb.textContent='Log & send back';alert((j&&j.reason)||'failed');return;}
+      critiques.push(t);runId=j.run_id;played.clear();seenSeq.clear();t0=null;failAt=null;setPhase('write');tick();};
+  };
+  const dlj=$('#dlj');if(dlj)dlj.onclick=()=>{const a=document.createElement('a');a.href='/api/runs/'+runId+'/report';a.download='audit-'+runId+'.json';a.click();};
+  const dlh=$('#dlh');if(dlh)dlh.onclick=()=>window.open('/api/runs/'+runId+'/report.html','_blank');
+  const tkd=$('#tkd');if(tkd)tkd.onclick=async()=>{if(!confirm('Take down (record rollback)?'))return;await J('/api/runs/'+runId+'/takedown',{method:'POST'});await tick();playApproval();};
+  const again=$('#again');if(again)again.onclick=()=>{stopRun();setPhase('select');};
 }
 
-/* ---------- ALARMS ---------- */
-function renderAlarms(d){const a=d.alarms||[];
-  $('#alarms').innerHTML=a.length?`<div class="glass pad">${a.map(x=>{const s={critical:'crit',high:'high',medium:'med'}[x.severity]||'high';
-    const f=x.failed_attacks?`<div class="rc" style="color:#ffb6bd">failed: ${x.failed_attacks.map(z=>esc(z.attack||z)).join(', ')}</div>`:'';
-    return `<div class="alarm ${s}"><div class="at"><span class="sv">${esc(x.severity)}</span><span class="ty">${esc(x.type)}</span>
-      <span style="margin-left:auto;color:var(--faint);font-size:11px;font-family:var(--mono)">${esc(x.stage)}</span></div>
-      <div class="cx">${esc(x.context)}</div><div class="rc">${esc(x.recommended_action)}</div>${f}</div>`;}).join('')}</div>`
-    :'<div class="glass empty">✓ No alarms — every gate is clean.</div>';}
+function stopRun(){if(pollTimer){clearInterval(pollTimer);pollTimer=null;}cancelAuto();runId=null;view=null;played.clear();}
 
-/* ---------- confetti ---------- */
-const cv=$('#fx'),cx=cv.getContext('2d');let parts=[];
-function resize(){cv.width=innerWidth;cv.height=innerHeight;}resize();addEventListener('resize',resize);
-function confetti(x,y){const cols=['#ffd24a','#3fe0ff','#8b6cff','#3df5a0','#ff5cdd','#fff'];
-  for(let i=0;i<90;i++){const a=Math.random()*Math.PI*2,sp=4+Math.random()*8;
-    parts.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-4,g:.22,life:60+Math.random()*40,
-      c:cols[i%cols.length],s:3+Math.random()*5,r:Math.random()*6,vr:(Math.random()-.5)*.4});}}
-function loop(){cx.clearRect(0,0,cv.width,cv.height);parts=parts.filter(p=>p.life>0);
-  parts.forEach(p=>{p.life--;p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
-    cx.save();cx.translate(p.x,p.y);cx.rotate(p.r);cx.globalAlpha=Math.min(1,p.life/30);
-    cx.fillStyle=p.c;cx.fillRect(-p.s/2,-p.s/2,p.s,p.s*1.6);cx.restore();});requestAnimationFrame(loop);}loop();
-
-/* ---------- wiring ---------- */
-function selTab(t){active=t;document.querySelectorAll('.tab').forEach(x=>x.setAttribute('aria-selected',x.dataset.v===t));
-  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id===t));if(cache)renderActive();}
-document.querySelectorAll('.tab').forEach((t,i,all)=>{t.onclick=()=>selTab(t.dataset.v);
-  t.onkeydown=e=>{if(e.key==='ArrowRight')all[(i+1)%all.length].click();if(e.key==='ArrowLeft')all[(i-1+all.length)%all.length].click();};});
-$('#runsel').onchange=e=>{runId=e.target.value;location.hash=runId;lastSig=null;gKey=null;twKey=null;tick();};
-$('#dlJson').onclick=()=>{if(!runId)return;const a=document.createElement('a');a.href=API+'/api/runs/'+runId+'/report';a.download='audit-'+runId+'.json';document.body.appendChild(a);a.click();a.remove();};
-$('#dlHtml').onclick=()=>{if(!runId)return;window.open(API+'/api/runs/'+runId+'/report.html','_blank');};
-addEventListener('hashchange',()=>{const h=location.hash.slice(1);if(h&&h!==runId){runId=h;lastSig=null;gKey=null;twKey=null;loadRuns().then(tick);}});
-document.addEventListener('visibilitychange',()=>{if(document.hidden){clearInterval(timer);timer=null;}else if(!timer){tick();timer=setInterval(tick,2000);}});
-
-async function boot(){$('#mission').innerHTML='<div class="glass empty">initialising flight console…</div>';
-  await loadControls();await loadRuns();await tick();timer=setInterval(tick,2000);}
-boot().catch(e=>{$('#mission').innerHTML='<div class="glass empty">'+esc(e.message)+'</div>';});
+/* ===== boot ===== */
+async function boot(){
+  try{presets=await J('/api/presets');}catch(e){presets=[];}
+  try{session=await J('/api/attack-stats');}catch(e){}
+  setPhase('select');
+}
+boot();
 </script>
 </body>
 </html>

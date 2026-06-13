@@ -692,7 +692,8 @@ def api_presets():
     from models.judges import PRESETS
 
     return [{"key": p.key, "label": p.name, "vendor": p.vendor, "provider": p.provider,
-             "model": p.model, "available": bool(os.environ.get(p.env_key))}
+             "model": p.model, "profile": p.profile,
+             "available": bool(os.environ.get(p.env_key))}
             for p in PRESETS]
 
 

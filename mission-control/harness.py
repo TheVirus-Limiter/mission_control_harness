@@ -302,11 +302,13 @@ class Harness:
                 "rehearsal"))
 
         if self.full_panel:
-            # Mirror the full declared roster as deterministic mock judges (with
-            # their real capability tiers), so tiering is visible without a key.
+            # Mirror the declared "diverse six" as deterministic mock judges (with
+            # their real capability tiers), so the tiered panel is visible without a
+            # key -- one per lineage, matching the live roster a real run would seat.
             from models.judges import PRESETS
 
-            judges: list[Worker] = [MockReviewer(p.name + " (mock)", profile=p.profile) for p in PRESETS]
+            judges: list[Worker] = [MockReviewer(p.name + " (mock)", profile=p.profile)
+                                    for p in PRESETS[:6]]
         else:
             # A small tiered mock panel: one deep, one standard, one lexical.
             judges = [
