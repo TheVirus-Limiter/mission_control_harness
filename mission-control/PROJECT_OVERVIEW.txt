@@ -699,7 +699,7 @@ quality gate is down and the run escalates. No second LLM is involved.
 
 
 --------------------------------------------------------------------------------
-23. THE TEST SUITE  (tests/ — 69 tests, run: `pytest -q`)
+23. THE TEST SUITE  (tests/ — 86 tests, run: `pytest -q`)
 --------------------------------------------------------------------------------
 test_pillars.py        The four pillars in isolation (no worker): store roundtrip,
                        guardrails, alarms structure, every deterministic checkpoint.
@@ -729,6 +729,19 @@ test_audit_fixes.py    Live-post foot-gun closed (auto-approve can't post live);
                        --real fails closed without judges; dashboard takedown.
 test_swappability.py   A different mission runs on the same engine; missions declare
                        different guardrails.
+test_demo_paths.py     Locks the three headline narratives (default / reject / block)
+                       so a refactor can't silently change what the demo shows.
+test_m6_report.py      Every run exports a complete audit report: full JSON with all
+                       sections + a self-contained printable HTML; 404 for unknown run.
+test_m7_revisions.py   The fail->revise->pass beat is a word-level diff in the view
+                       model (a pure read over persisted draft attempts).
+test_m8_feedback.py    A held post's correction reaches the writer on the next attempt;
+                       a CONFIRMED save persists a declared guardrail subsequent runs
+                       load; an UNCONFIRMED correction never persists.
+test_m9_cost.py        The cost/latency meter aggregates persisted tokens/seconds,
+                       attributes them per gate, and prices them off the declared table.
+test_m10_attack_stats.py  Session-level attacks-survived counts match the persisted
+                       gauntlet events (clean run + a refused sketchy agent).
 conftest.py            sys.path setup + tmp_db / launch_mission fixtures.
 
 

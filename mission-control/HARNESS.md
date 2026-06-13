@@ -297,8 +297,13 @@ nothing.
 | 6 | persistence + replay from a checkpoint | `test_replay_from_rehearsal` |
 | 7 | swappability (mission + judge model) | `test_swappability`, `test_m2_real` |
 | 8 | safe by default (dry-run, no real post) | `test_dry_run_is_default` |
+| 9 | every run exports a complete audit report (JSON + printable HTML) | `test_m6_report` |
+| 10 | the fail→revise→pass beat is a visible word-level diff | `test_m7_revisions` |
+| 11 | a held post's correction reaches the writer; a *confirmed* save persists a declared guardrail; an unconfirmed one does not | `test_m8_feedback` |
+| 12 | the cost/latency meter aggregates persisted telemetry and prices it from the declared table | `test_m9_cost` |
+| 13 | session-level attacks-survived counts match the persisted gauntlet events | `test_m10_attack_stats` |
 
-Run `pytest -q` — 73 tests, all green.
+Run `pytest -q` — 86 tests, all green.
 
 ---
 

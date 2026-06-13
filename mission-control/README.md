@@ -110,12 +110,20 @@ launches are always dry-run) and four panels:
    hold mark. No fake likes, no scores, no averages.
 4. **Alarms** — severity-colored cards with type, context, and recommended action.
 
+Across the deck: a **cost/latency meter** and a session-wide **attacks-survived**
+scoreboard (both pure reads of persisted telemetry), a **revision diff** showing
+the fail→revise→pass beat word-by-word, a one-click **audit report** export
+(`/api/runs/{id}/report` JSON + a printable `report.html`), and — when a reviewer
+holds a post — a **correction box** that feeds the writer on the next attempt and,
+*only if explicitly confirmed*, saves the note as a declared standing guardrail
+(`<mission>.learned.json`). None of that is model training; it edits the rulebook.
+
 Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
 
 ## Tests
 
 ```bash
-pytest -q          # 73 tests: the deterministic guarantees in HARNESS.md §Acceptance
+pytest -q          # 86 tests: the deterministic guarantees in HARNESS.md §Acceptance
 
 # Confirm the REAL multi-vendor panel works before a live demo (dry-run, never posts):
 python verify_real.py            # preset=claude, mission=lumora — prints consent/held
