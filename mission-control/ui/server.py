@@ -54,8 +54,8 @@ _SEV = {"medium": "med", "high": "high", "critical": "crit"}
 def _label(e: dict) -> dict:
     """Turn a raw event into a display row for the timeline."""
     kind, name, ok, detail = e["kind"], e["name"] or "", e["ok"], e["detail"] or {}
-    row = {"stage": e["stage"], "kind": kind, "name": name, "ok": ok,
-           "status": "", "tone": "muted", "text": ""}
+    row = {"stage": e["stage"], "kind": kind, "name": name, "ok": ok, "ts": e["ts"],
+           "status": "", "tone": "muted", "text": "", "meta": ""}
 
     if kind == "check":
         row["status"] = "GO" if ok else "NO-GO"
@@ -64,7 +64,7 @@ def _label(e: dict) -> dict:
     elif kind == "alarm":
         sev = detail.get("severity", "high")
         row["status"] = "ALARM"
-        row["tone"] = "crit" if sev == "critical" else ("high" if sev == "high" else "med")
+        row["tone"] = {"critical": "crit", "high": "high", "medium": "med"}.get(sev, "high")
         row["text"] = f"{detail.get('type', name)} — {detail.get('context', '')}"
     elif kind == "attack":
         row["status"] = "SURVIVED" if ok else "BREACH"
@@ -90,22 +90,43 @@ def _label(e: dict) -> dict:
         row["status"] = "POSTED"
         row["tone"] = "go"
         row["text"] = f"action · post ({detail.get('mode')})"
+    elif kind == "takedown":
+        row["status"] = "REMOVED"
+        row["tone"] = "held"
+        row["text"] = f"action · takedown ({detail.get('mode')})"
     elif kind == "revision":
         row["status"] = "RETRY"
         row["tone"] = "med"
+        fb = (detail.get("feedback") or "").replace("\n", " ")
         row["text"] = f"revision · {name}"
+        row["meta"] = (fb[:120] + "…") if len(fb) > 120 else fb
     elif kind == "replay":
         row["status"] = "REPLAY"
-        row["tone"] = "muted"
-        row["text"] = f"replay · {e['stage']}"
+        row["tone"] = "accent"
+        row["text"] = f"replay · {e['stage']} reused from store"
+    elif kind == "gate":
+        row["tone"] = "accent"
+        if name == "digital-twin":
+            row["status"] = "TWIN"
+            row["text"] = "digital-twin · byte-identical payload"
+            row["meta"] = f"egress {detail.get('egress')} · {detail.get('byte_len')} bytes"
+        else:
+            row["status"] = "PROBE"
+            row["text"] = f"admission · {name}"
     elif kind == "stage":
         row["status"] = {"pass": "GO", "start": "·"}.get(name, name.upper())
         row["tone"] = "go" if name == "pass" else "muted"
-        row["text"] = f"stage · {name}"
+        row["text"] = f"stage · {e['stage']} {name}"
+        if name == "pass" and detail.get("attempt") is not None:
+            row["meta"] = (f"attempt {detail.get('attempt')} · {detail.get('seconds')}s "
+                           f"· {detail.get('tokens')} tok")
     elif kind == "run":
         row["status"] = "***"
         row["tone"] = "accent"
         row["text"] = f"mission · {name}"
+    elif kind == "info":
+        row["status"] = "INFO"
+        row["text"] = f"{e['stage']} · {name}"
     else:
         row["text"] = f"{kind} · {name}"
     return row
@@ -149,6 +170,8 @@ def _assemble(st: Store, run_id: str) -> dict:
             gauntlet.append({
                 "agent": d.get("agent"),
                 "certified": d.get("certified"),
+                "policy": d.get("policy"),
+                "canary": d.get("canary_fingerprint"),
                 "attacks": [
                     {"attack": a.get("attack"), "survived": a.get("survived"),
                      "leaked": a.get("evidence")}
@@ -156,13 +179,30 @@ def _assemble(st: Store, run_id: str) -> dict:
                 ],
             })
 
+    # the digital-twin proof: egress disabled + byte length, byte-identical to live
+    rehearsal_proof = None
+    for e in events:
+        if e["kind"] == "gate" and e["name"] == "digital-twin" and e["detail"]:
+            rehearsal_proof = {"egress": e["detail"].get("egress"),
+                               "byte_len": e["detail"].get("byte_len")}
+
+    # counts for the header readout
+    agents_certified = sum(1 for g in gauntlet if g["certified"])
+    open_alarms = sum(1 for a in alarms if a.get("severity") in ("high", "critical"))
+    taken_down = any(e["kind"] == "takedown" for e in events)
+
     # panel + post from outputs
     panel = _panel_view(st, run_id)
     post = _post_view(st, run_id, events)
+    post_id = next((e["name"] for e in events if e["kind"] == "post"), None)
 
     timeline = [{"seq": i + 1, **_label(e)} for i, e in enumerate(events)]
     return {"run_id": run_id, "mission": mission, "status": status,
             "posted": posted, "awaiting": awaiting and not approved,
+            "halted": halted, "can_takedown": bool(posted and not taken_down),
+            "taken_down": taken_down, "post_id": post_id,
+            "agents_certified": agents_certified, "open_alarms": open_alarms,
+            "rehearsal_proof": rehearsal_proof,
             "timeline": timeline, "alarms": alarms, "gauntlet": gauntlet,
             "panel": panel, "post": post}
 
@@ -244,9 +284,13 @@ def api_run(run_id: str):
 
 @app.post("/api/runs/{run_id}/approve")
 def api_approve(run_id: str):
-    """Dashboard human-hold approval: records the approval and performs the
-    dry-run post -- the same governed path as the CLI. Refuses if the panel
-    is not publish-eligible or if it already posted."""
+    """Dashboard human-hold approval. Routes through the SAME ActionGate the CLI
+    uses (one governed posting path), with a dashboard-interactive approver so it
+    can perform a real post when DRY_RUN=0 + creds are present. Refuses if the
+    panel is not publish-eligible or it already posted."""
+    from guardrails import Guardrails
+    from gates.action import ActionGate, render_post
+
     st = store()
     try:
         events = st.events(run_id)
@@ -258,13 +302,41 @@ def api_approve(run_id: str):
         if not reh or not reh.get("eligible"):
             return JSONResponse({"ok": False, "reason": "panel did not pass — not publish-eligible"},
                                 status_code=409)
-        text = reh.get("payload", {}).get("text", "")
-        st.log(run_id, "action", "approval", "human(dashboard)", ok=True,
-               detail={"approved": True, "mode": "dry_run", "via": "dashboard"})
-        record = DryRunXClient(st).post(run_id, build_x_payload(text))
+        text = (reh.get("rendered") or {}).get("text") or reh.get("payload", {}).get("text", "")
+        handle = (reh.get("rendered") or {}).get("author", "@yourbrand")
+
+        # A dashboard click IS an interactive human approval.
+        def approver(rid, rendered):
+            return True
+        approver.interactive = True  # type: ignore[attr-defined]
+
+        gate = ActionGate(st, Guardrails(human_hold_required=True), approver=approver, handle=handle)
+        record = gate.run(run_id, text)
         st.log(run_id, "action", "stage", "pass", ok=True,
                detail={"post_id": record["post_id"], "mode": record["mode"]})
         return {"ok": True, "post_id": record["post_id"], "mode": record["mode"]}
+    finally:
+        st.close()
+
+
+@app.post("/api/runs/{run_id}/takedown")
+def api_takedown(run_id: str):
+    """Roll back a post (the takedown story). Records a takedown event (and calls
+    the real delete endpoint only in live mode)."""
+    from guardrails import Guardrails
+    from gates.action import ActionGate
+
+    st = store()
+    try:
+        events = st.events(run_id)
+        post = next((e for e in events if e["kind"] == "post"), None)
+        if not post:
+            return JSONResponse({"ok": False, "reason": "nothing posted to take down"}, status_code=409)
+        if any(e["kind"] == "takedown" for e in events):
+            return JSONResponse({"ok": False, "reason": "already taken down"}, status_code=409)
+        gate = ActionGate(st, Guardrails(), approver=lambda r, x: True)
+        rec = gate.takedown(run_id, post["name"])
+        return {"ok": True, "post_id": rec["post_id"]}
     finally:
         st.close()
 
