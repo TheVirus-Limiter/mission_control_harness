@@ -614,7 +614,7 @@ function renderBroadcast(d){
   streamReplies(d,panel.judges||[]);
   const ab=$('#apr');if(ab)ab.onclick=async()=>{ab.disabled=true;ab.textContent='posting…';
     const j=await(await fetch(API+'/api/runs/'+runId+'/approve',{method:'POST'})).json();
-    if(!j.ok){ab.disabled=false;ab.textContent='Approve & post (dry-run)';alert(j.reason);}else{const w=$('.xcard').getBoundingClientRect();confetti(w.left+w.width/2,w.top+60);}lastSig=null;twKey=null;tick();};
+    if(!j.ok){ab.disabled=false;ab.textContent='Approve & post (dry-run)';alert(j.reason);}else{const xc=$('.xcard');if(xc){const w=xc.getBoundingClientRect();confetti(w.left+w.width/2,w.top+60);}}lastSig=null;twKey=null;tick();};
   const tb=$('#tkd');if(tb)tb.onclick=async()=>{if(!confirm('Take down (record rollback)?'))return;tb.disabled=true;await fetch(API+'/api/runs/'+runId+'/takedown',{method:'POST'});lastSig=null;tick();};
 }
 /* ITEM 3: a held/awaiting post lets a human type a correction. It is fed to the

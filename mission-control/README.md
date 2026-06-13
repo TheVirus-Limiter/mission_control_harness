@@ -123,7 +123,7 @@ Point the dashboard at a specific store with `MISSION_DB=/path/to/mission.db`.
 ## Tests
 
 ```bash
-pytest -q          # 86 tests: the deterministic guarantees in HARNESS.md §Acceptance
+pytest -q          # 88 tests: the deterministic guarantees in HARNESS.md §Acceptance
 
 # Confirm the REAL multi-vendor panel works before a live demo (dry-run, never posts):
 python verify_real.py            # preset=claude, mission=lumora — prints consent/held

@@ -95,7 +95,9 @@ def load_learned_guidance(mission_path: str) -> list:
     if os.path.exists(p):
         try:
             with open(p, encoding="utf-8") as f:
-                return [str(x) for x in (json.load(f) or [])]
+                # Drop blanks -- the sidecar is hand-editable, and an empty rule
+                # would inject stray separators into the writer's prompt.
+                return [str(x).strip() for x in (json.load(f) or []) if str(x).strip()]
         except Exception:
             return []
     return []
@@ -106,9 +108,11 @@ def append_learned_guidance(mission_path: str, text: str) -> list:
     load it. This is a rulebook edit, NOT a model update."""
     import json
     g = load_learned_guidance(mission_path)
-    g.append(str(text).strip())
-    with open(learned_guidance_path(mission_path), "w", encoding="utf-8") as f:
-        json.dump(g, f, indent=2)
+    text = str(text).strip()
+    if text:                      # never persist a blank rule
+        g.append(text)
+        with open(learned_guidance_path(mission_path), "w", encoding="utf-8") as f:
+            json.dump(g, f, indent=2)
     return g
 
 

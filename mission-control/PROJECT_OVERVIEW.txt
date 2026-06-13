@@ -699,7 +699,7 @@ quality gate is down and the run escalates. No second LLM is involved.
 
 
 --------------------------------------------------------------------------------
-23. THE TEST SUITE  (tests/ — 86 tests, run: `pytest -q`)
+23. THE TEST SUITE  (tests/ — 88 tests, run: `pytest -q`)
 --------------------------------------------------------------------------------
 test_pillars.py        The four pillars in isolation (no worker): store roundtrip,
                        guardrails, alarms structure, every deterministic checkpoint.

@@ -303,7 +303,7 @@ nothing.
 | 12 | the cost/latency meter aggregates persisted telemetry and prices it from the declared table | `test_m9_cost` |
 | 13 | session-level attacks-survived counts match the persisted gauntlet events | `test_m10_attack_stats` |
 
-Run `pytest -q` — 86 tests, all green.
+Run `pytest -q` — 88 tests, all green.
 
 ---
 

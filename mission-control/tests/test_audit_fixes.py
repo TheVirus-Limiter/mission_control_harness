@@ -96,6 +96,21 @@ def test_meta_check_overall_pass_cannot_contradict_a_fail():
     assert r.ok is False and any("contradict" in p for p in r.evidence["problems"])
 
 
+def test_meta_check_ignores_telemetry_keys():
+    """RealJudge now stamps cost-meter telemetry (_tokens/_seconds) onto the
+    verdict. Those extra top-level keys must NOT relax or break the audit: a clean
+    verdict still passes, and a contradicting one still fails, with them present."""
+    ctx = {"rubric": ["clarity"], "text": "the post is clear and short"}
+    clean = {"overall": "pass", "criteria": {"clarity": "pass"}, "reasons": {},
+             "citations": {}, "comment": "looks good", "_tokens": 812, "_seconds": 1.3}
+    assert REGISTRY["meta_check"](_env(clean), ctx).ok is True
+    # the audit still catches a hallucinated citation even with telemetry attached
+    bad = {"overall": "fail", "criteria": {"clarity": "fail"},
+           "reasons": {"clarity": "weak"}, "citations": {"clarity": "NOT IN THE POST"},
+           "_tokens": 900, "_seconds": 2.0}
+    assert REGISTRY["meta_check"](_env(bad), ctx).ok is False
+
+
 # --- citation stripping: clean channel, byte-identical ---------------------
 def test_to_channel_strips_citation_tokens():
     assert to_channel("Up 90% [f1]. Costs $5 [f2].") == "Up 90%. Costs $5."
