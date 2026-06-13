@@ -228,6 +228,45 @@ button{font-family:inherit;cursor:pointer}
 .phase{padding:24px}
 .glass{background:var(--panel);border:1px solid var(--hair);border-radius:13px;padding:16px}
 
+/* ===== WRITE observability ===== */
+.wwrap{height:100%;display:flex;flex-direction:column}
+.whead{flex:none;display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--hair)}
+.whead .mi{font-family:var(--arc);font-size:10px;color:var(--go)}
+.whead .ti{font-weight:600;color:var(--ink-bright)}
+.whead .st{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cyan)}
+.wbody{flex:1;display:flex;min-height:0}
+.wrail{width:230px;flex:none;border-right:1px solid var(--hair);background:rgba(6,12,9,.4);padding:16px 14px;display:flex;flex-direction:column;gap:4px}
+.wrail .pl{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.wnode{border:1px solid var(--hair);border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.wnode .g{margin-left:auto;font-weight:700}
+.wnode.idle{opacity:.5}.wnode.active{border-color:rgba(53,255,158,.4);color:var(--go)}
+.wnode.done{border-color:rgba(53,255,158,.3)}.wnode.done .g{color:var(--go)}
+.wnode.ready{border-color:rgba(111,208,239,.4);color:var(--cyan)}
+.warrow{text-align:center;color:var(--faintest);font-size:13px;line-height:1}
+.wrobot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:16px}
+.wrobot .lbl{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.wmain{flex:1;overflow:auto;padding:18px 22px;min-width:0}
+.wmain .ob{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase;margin-bottom:10px}
+.wsearch{font-family:var(--mono);font-size:13px;background:#07120d;border:1px solid var(--hair);border-radius:9px;padding:10px 13px;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.wsearch .eng{margin-left:auto;font-size:10px;color:var(--cyan);border:1px solid rgba(111,208,239,.3);border-radius:6px;padding:2px 8px}
+.wcols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.wcol .ch{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.fcard{border:1px solid var(--hair);border-radius:10px;padding:11px 12px;margin-bottom:8px;background:var(--panel2);animation:fadein .35s both}
+.fcard .fid{font-family:var(--mono);font-weight:700;color:var(--go)}
+.fcard .src{display:block;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--cyan);text-decoration:none}
+.dcard{border:1px solid var(--hair);border-radius:11px;padding:12px;margin-bottom:10px;background:var(--panel2);animation:fadein .35s both}
+.dcard.bad{border-color:rgba(255,84,102,.35)}.dcard.ok{border-color:rgba(53,255,158,.3)}
+.dcard .dh{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.dcard .vr.ok{color:var(--go)}.dcard .vr.bad{color:var(--no)}
+.dcard .dt{margin:8px 0;font-size:14.5px;line-height:1.5}
+.dcard .difftog{margin-left:auto;font-size:10px;color:var(--cyan);cursor:pointer;border:1px solid rgba(111,208,239,.3);border-radius:6px;padding:1px 7px}
+.dcard mark{background:rgba(255,84,102,.25);border-bottom:2px solid var(--no);color:#fff;border-radius:2px;padding:0 2px}
+.flagrow{font-family:var(--mono);font-size:11px;color:#ffb6bd;border-left:2px solid var(--no);padding-left:9px;margin:4px 0}
+.flagrow b{color:var(--no)}
+.diffbox{font-size:13.5px;line-height:1.6;background:rgba(3,9,6,.5);border-radius:8px;padding:10px;margin-top:8px}
+.diffbox del{background:rgba(255,84,102,.2);color:#ffb6bd;text-decoration:line-through}
+.diffbox ins{background:rgba(53,255,158,.18);color:#bfffe0;text-decoration:none}
+
 /* ---- keyframes ---- */
 @keyframes blink{50%{opacity:0}}
 @keyframes pulse{50%{opacity:.32}}
@@ -657,25 +696,58 @@ function gauntletBreach(){
   const b=$('#gretry');if(b)b.onclick=()=>{stopRun();setPhase('select');};
 }
 
-/* ===== WRITE (simple — upgraded in Step 5) ===== */
-function renderWrite(){$('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">MISSION · research → write</h1>
-  <p class="sub">the agent is searching and drafting…</p></div>`;}
-function playWrite(){
+/* ===== WRITE — observability IS the view ===== */
+function missionTitle(){return (view&&view.mission)||'Lumora Sleep — Launch Post';}
+function writeShell(status,railState,body){
+  return `<div class="wwrap">
+    <div class="whead"><span class="mi">MISSION</span><span class="ti">${esc(missionTitle())}</span><span class="st">${esc(status)}_</span></div>
+    <div class="wbody">
+      <div class="wrail"><div class="pl">pipeline</div>
+        <div class="wnode ${railState.research}">RESEARCH<span class="g">${railGlyph(railState.research)}</span></div>
+        <div class="warrow">↓</div>
+        <div class="wnode ${railState.write}">WRITE<span class="g">${railGlyph(railState.write)}</span></div>
+        <div class="warrow">↓</div>
+        <div class="wnode ${railState.rehearsal}">REHEARSAL<span class="g">${railGlyph(railState.rehearsal)}</span></div>
+        <div class="wrobot">${robot(sel.vendor,'run')}<span class="lbl">writer agent</span>
+          ${railState.write==='done'?'<button class="btn go arc" id="wnext" style="margin-top:10px;font-size:10px">▶ REHEARSAL</button>':''}</div>
+      </div>
+      <div class="wmain">${body}</div>
+    </div></div>`;
+}
+function railGlyph(s){return s==='done'?'GO':s==='active'?'···':s==='ready'?'NEXT':'—';}
+function renderWrite(){
+  if(wReady())return writeContent(false);  // revisit: resolved content, no auto-advance
+  $('#stage').innerHTML=writeShell('researching the brief',{research:'active',write:'idle',rehearsal:'idle'},
+    '<div class="ob">▸ observability — what the agent searched &amp; wrote</div><p class="sub">gathering sources…</p>');
+}
+function playWrite(){writeContent(true);}
+function writeContent(auto){
   const r=view.research||{};const facts=r.facts||{};const src=r.sources||{};
-  const drafts=(view.drafts||[]).filter(d=>d.stage==='write');
-  const fcards=Object.keys(facts).map(id=>`<div class="glass" style="margin:6px 0"><b style="color:var(--go);font-family:var(--mono)">[${esc(id)}]</b> ${esc(facts[id])} ${src[id]?`<a style="color:var(--cyan);font-size:11px" href="https://${esc(src[id])}" target="_blank">🔗 ${esc(src[id])}</a>`:''}</div>`).join('');
-  const dcards=drafts.map(d=>{
-    let body=esc(d.text);(d.flags||[]).forEach(f=>{if(f.span){const s=esc(f.span);if(body.includes(s))body=body.split(s).join(`<mark style="background:rgba(255,84,102,.25);border-bottom:2px solid var(--no);color:#fff">${s}</mark>`);}});
-    const fl=(d.flags||[]).map(f=>`<div style="font-family:var(--mono);font-size:11px;color:var(--no);border-left:2px solid var(--no);padding-left:8px;margin:3px 0">${esc(f.check)} — ${esc(f.reason)} ${f.span?`"${esc(f.span)}"`:''}</div>`).join('');
-    return `<div class="glass" style="margin:8px 0"><div style="font-family:var(--mono);font-size:11px;color:var(--faint)">Draft #${d.attempt} · ${d.ok?'<span style="color:var(--go)">✓ passed checks</span>':'<span style="color:var(--no)">✗ flagged</span>'}</div>
-      <div style="margin:6px 0;font-size:15px">${body}</div>${fl}</div>`;
+  const drafts=(view.drafts||[]).filter(d=>d.stage==='write').sort((a,b)=>(a.attempt||0)-(b.attempt||0));
+  const revs=(view.revisions||[]).filter(x=>x.stage==='write');
+  const fcards=Object.keys(facts).map((id,i)=>`<div class="fcard" style="animation-delay:${i*0.08}s">
+    <span class="fid">[${esc(id)}]</span> ${esc(facts[id])}
+    ${src[id]?`<a class="src" href="https://${esc(src[id])}" target="_blank">🔗 ${esc(src[id])}</a>`:''}</div>`).join('');
+  const dcards=drafts.map((d,i)=>{
+    let body=esc(d.text);
+    (d.flags||[]).forEach(f=>{if(f.span){const s=esc(f.span);if(body.includes(s))body=body.split(s).join(`<mark>${s}</mark>`);}});
+    const fl=(d.flags||[]).map(f=>`<div class="flagrow"><b>${esc(f.check)}</b> — ${esc(f.reason)}${f.span?` “${esc(f.span)}”`:''}</div>`).join('');
+    const rev=revs.find(x=>x.to===d.attempt);
+    const tog=rev?`<span class="difftog" data-d="${d.attempt}">▸ diff</span>`:'';
+    const diff=rev?`<div class="diffbox" id="diff-${d.attempt}" hidden>${rev.ops.map(o=>o.t==='eq'?esc(o.text):o.t==='del'?`<del>${esc(o.text)}</del>`:`<ins>${esc(o.text)}</ins>`).join(' ')}</div>`:'';
+    return `<div class="dcard ${d.ok?'ok':'bad'}" style="animation-delay:${(i+Object.keys(facts).length)*0.08}s">
+      <div class="dh">Draft #${d.attempt} · ${esc(d.worker||'writer')} <span class="vr ${d.ok?'ok':'bad'}">${d.ok?'✓ passed checks':'✗ flagged'}</span>${tog}</div>
+      <div class="dt">${body}</div>${fl}${diff}</div>`;
   }).join('');
-  $('#stage').innerHTML=`<div class="wrap"><h1 class="h-arc" style="font-size:12px">MISSION · Lumora Sleep — Launch Post</h1>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px">
-      <div><div class="field-lbl">sources · what it searched</div>${fcards||'<p class="sub">—</p>'}</div>
-      <div><div class="field-lbl">drafts · what it wrote</div>${dcards||'<p class="sub">—</p>'}</div></div>
-    <button class="btn go arc" id="wnext" style="margin-top:16px">▶ REHEARSAL</button></div>`;
-  startAuto(3,()=>setPhase('rehearsal'),'#wnext','▶ REHEARSAL');
+  const main=`<div class="ob">▸ observability — what the agent searched &amp; wrote</div>
+    <div class="wsearch">▸_ ${esc(r.query||missionTitle())}<span class="eng">${esc(r.engine||'model')}</span></div>
+    <div class="wcols">
+      <div class="wcol"><div class="ch">sources · what it searched</div>${fcards||'<p class="sub">—</p>'}</div>
+      <div class="wcol"><div class="ch">drafts · what it wrote</div>${dcards||'<p class="sub">—</p>'}</div></div>`;
+  $('#stage').innerHTML=writeShell('ready to rehearse',{research:'done',write:'done',rehearsal:'ready'},main);
+  $$('.difftog').forEach(el=>el.onclick=()=>{const b=$('#diff-'+el.dataset.d);if(b){b.hidden=!b.hidden;el.textContent=b.hidden?'▸ diff':'▾ diff';}});
+  const wn=$('#wnext');if(wn)wn.onclick=()=>setPhase('rehearsal');
+  if(auto)startAuto(3,()=>setPhase('rehearsal'),'#wnext','▶ REHEARSAL');
 }
 
 /* ===== REHEARSAL (simple — upgraded in Step 6) ===== */
