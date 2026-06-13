@@ -228,6 +228,7 @@ class RealJudge(Worker):
     def __init__(self, cfg):
         self.cfg = cfg
         self.name = cfg.name
+        self.profile = getattr(cfg, "profile", "deep")  # capability tier
 
     @property
     def available(self) -> bool:

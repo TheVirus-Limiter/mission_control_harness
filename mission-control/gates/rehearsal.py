@@ -29,6 +29,7 @@ from typing import Optional
 from alarms import Alarm, AlarmType
 from checkpoints import meta_check
 from materials import Envelope
+from models.judges import tier_rank
 from gates.action import build_x_payload, render_post
 
 
@@ -60,51 +61,65 @@ def network_disabled():
         socket.create_connection = real_create  # type: ignore[assignment]
 
 
+_RANK_NAME = {0: "lexical", 1: "standard", 2: "deep"}
+
+
 class Rehearsal:
     def __init__(self, store, guardrails, rubric: list[str], reviewer_retries: int = 2,
-                 handle: str = "@yourbrand"):
+                 handle: str = "@yourbrand", criterion_tiers: Optional[dict] = None):
         self.store = store
         self.guardrails = guardrails
         self.rubric = list(rubric)
         self.reviewer_retries = int(reviewer_retries)
         self.handle = handle
+        # criterion -> minimum tier RANK allowed to vote (default 0 = lexical,
+        # i.e. everyone votes -> backward-compatible unanimous consent).
+        self.criterion_tiers = dict(criterion_tiers or {})
 
-    # -- per-judge review with meta_check audit + retry ----------------------
-    def _review(self, judge, text: str, run_id: str) -> dict:
+    def _assigned(self, judge) -> list[str]:
+        """The criteria THIS judge is capable enough (high enough tier) to vote on."""
+        jt = tier_rank(getattr(judge, "profile", "deep"))
+        return [c for c in self.rubric if jt >= self.criterion_tiers.get(c, 0)]
+
+    # -- per-judge review (only its assigned criteria) + meta_check + retry ---
+    def _review(self, judge, text: str, run_id: str, assigned: list[str]) -> dict:
+        if not assigned:  # this judge's tier covers no criterion -> it casts no vote
+            v = {"overall": "pass", "criteria": {}, "reasons": {}, "citations": {},
+                 "comment": "(no criteria at my tier)"}
+            self.store.log(run_id, "rehearsal", "verdict", judge.name, ok=True, detail=v)
+            return v
         attempt = 0
         while True:
             attempt += 1
             try:
-                verdict = judge.run({"rubric": self.rubric, "text": text,
+                verdict = judge.run({"rubric": assigned, "text": text,
                                      "post": render_post(build_x_payload(text))})
             except Exception as e:
                 verdict = {"_error": str(e)}
 
+            # meta_check audits the judge against ONLY its assigned criteria, so it
+            # is never faulted for omitting a criterion it was not asked about.
             audit = meta_check(Envelope(run_id, "rehearsal", verdict),
-                               {"rubric": self.rubric, "text": text})
+                               {"rubric": assigned, "text": text})
             self.store.log(run_id, "rehearsal", "check", f"meta_check:{judge.name}",
-                           ok=audit.ok, detail={"attempt": attempt, **audit.evidence})
+                           ok=audit.ok, detail={"attempt": attempt, "assigned": assigned, **audit.evidence})
 
             if audit.ok:
                 self.store.log(run_id, "rehearsal", "verdict", judge.name,
                                ok=(verdict.get("overall") == "pass"), detail=verdict)
                 return verdict
 
-            # --- the judge is faulty (branch 2 of the three-way routing) ---
             fault = Alarm(AlarmType.REVIEWER_FAULT,
                           f"judge '{judge.name}' produced a malformed/hallucinated verdict: "
                           f"{audit.evidence.get('problems')}", "rehearsal")
             self.store.log(run_id, "rehearsal", "alarm", fault.type.value, ok=False,
                            detail=fault.as_dict())
-
             if attempt > self.reviewer_retries:
                 esc = Alarm(AlarmType.ESCALATE_HUMAN,
                             f"judge '{judge.name}' still faulty after {attempt} attempts; "
                             "the quality gate is down -- refusing to proceed", "rehearsal")
-                self.store.log(run_id, "rehearsal", "alarm", esc.type.value, ok=False,
-                               detail=esc.as_dict())
+                self.store.log(run_id, "rehearsal", "alarm", esc.type.value, ok=False, detail=esc.as_dict())
                 raise RehearsalEscalation(esc)
-
             self.store.log(run_id, "rehearsal", "revision", f"rerun-judge:{judge.name}",
                            ok=False, detail={"attempt": attempt})
 
@@ -118,37 +133,54 @@ class Rehearsal:
                        detail={"payload": payload, "rendered": rendered,
                                "egress": "disabled", "byte_len": len(text)})
 
-        # 2 + 3) review every judge CONCURRENTLY, auditing each verdict. The
-        # judges are independent and I/O-bound, so the panel runs in ~one
-        # review's time regardless of how many judges are seated.
+        assigned = {j.name: self._assigned(j) for j in judges}
+        profiles = {j.name: getattr(j, "profile", "deep") for j in judges}
+        # which judges may vote on each criterion (its eligible voter set)
+        voters = {c: [j.name for j in judges if c in assigned[j.name]] for c in self.rubric}
+
+        # FAIL CLOSED: a criterion with zero eligible voters is a config error --
+        # never let a (possibly safety-critical) criterion go unjudged.
+        unjudged = [c for c, vs in voters.items() if not vs]
+        if unjudged:
+            esc = Alarm(AlarmType.CONFIG_ERROR,
+                        f"criteria {unjudged} have no judge at their required tier; "
+                        "refusing to pass them unjudged", "rehearsal")
+            self.store.log(run_id, "rehearsal", "alarm", esc.type.value, ok=False, detail=esc.as_dict())
+            raise RehearsalEscalation(esc)
+
+        # 2 + 3) review every judge CONCURRENTLY (independent, I/O-bound).
         verdicts: dict[str, dict] = {}
         escalation: Optional[RehearsalEscalation] = None
         with ThreadPoolExecutor(max_workers=min(8, max(1, len(judges)))) as ex:
-            futs = {ex.submit(self._review, j, text, run_id): j for j in judges}
+            futs = {ex.submit(self._review, j, text, run_id, assigned[j.name]): j for j in judges}
             for fut, judge in futs.items():
                 try:
                     verdicts[judge.name] = fut.result()
-                except RehearsalEscalation as e:  # a judge stayed broken
+                except RehearsalEscalation as e:
                     escalation = escalation or e
         if escalation:
             raise escalation
-        # restore declared order for stable display
         verdicts = {j.name: verdicts[j.name] for j in judges if j.name in verdicts}
 
-        # 4) unanimous consent -- HELD if ANY judge flags ANY criterion.
-        held = []
-        for jname, v in verdicts.items():
-            for crit, val in v.get("criteria", {}).items():
-                if val == "fail":
-                    held.append({"judge": jname, "criterion": crit,
-                                 "reason": v.get("reasons", {}).get(crit, "")})
+        # 4) consent: each criterion is unanimous WITHIN its eligible voters; the
+        # post is eligible iff every criterion passes. No averaging anywhere.
+        held, outcomes = [], {}
+        for c in self.rubric:
+            flaggers = []
+            for jn in voters[c]:
+                if verdicts.get(jn, {}).get("criteria", {}).get(c) == "fail":
+                    flaggers.append(jn)
+                    held.append({"judge": jn, "criterion": c, "tier": profiles.get(jn, "deep"),
+                                 "reason": verdicts[jn].get("reasons", {}).get(c, "")})
+            outcomes[c] = {"min_tier": _RANK_NAME.get(self.criterion_tiers.get(c, 0), "lexical"),
+                           "voters": voters[c], "passed": not flaggers, "flagged_by": flaggers}
         eligible = not held
 
         result = {"eligible": eligible, "held": held, "verdicts": verdicts,
-                  "payload": payload, "rendered": rendered, "rubric": self.rubric}
-        self.store.log(run_id, "rehearsal", "panel", "unanimous-consent", ok=eligible,
-                       detail={"eligible": eligible, "held": held,
-                               "judges": list(verdicts.keys())})
-        # Persist the panel result so the dashboard and replay can read it.
+                  "payload": payload, "rendered": rendered, "rubric": self.rubric,
+                  "judge_profiles": profiles, "assigned": assigned, "criteria_outcomes": outcomes}
+        self.store.log(run_id, "rehearsal", "panel", "tiered-consent", ok=eligible,
+                       detail={"eligible": eligible, "held": held, "judges": list(verdicts.keys()),
+                               "criteria_outcomes": outcomes})
         self.store.save_output(Envelope(run_id, "rehearsal", result))
         return result

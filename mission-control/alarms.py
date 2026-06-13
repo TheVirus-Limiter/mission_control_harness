@@ -35,6 +35,7 @@ class AlarmType(str, Enum):
     BUDGET_EXCEEDED = "BUDGET_EXCEEDED"
     ESCALATE_HUMAN = "ESCALATE_HUMAN"
     SCHEMA_INVALID = "SCHEMA_INVALID"
+    CONFIG_ERROR = "CONFIG_ERROR"
 
 
 # Default severity per type. A checkpoint can override when it raises.
@@ -51,6 +52,7 @@ _DEFAULT_SEVERITY: dict[AlarmType, Severity] = {
     AlarmType.BUDGET_EXCEEDED: Severity.HIGH,
     AlarmType.ESCALATE_HUMAN: Severity.CRITICAL,
     AlarmType.SCHEMA_INVALID: Severity.HIGH,
+    AlarmType.CONFIG_ERROR: Severity.CRITICAL,
 }
 
 # The recommended action is a property of the *type*, not invented per-call.
@@ -67,6 +69,7 @@ _RECOMMENDED_ACTION: dict[AlarmType, str] = {
     AlarmType.BUDGET_EXCEEDED: "Stop revising; fail closed and escalate to a human.",
     AlarmType.ESCALATE_HUMAN: "Stop. A gate could not reach a verdict -- hand the run to a human.",
     AlarmType.SCHEMA_INVALID: "Reject the stage output; the required fields are missing or empty.",
+    AlarmType.CONFIG_ERROR: "Fix the mission/panel config: a criterion has no judge at its required tier. Do not proceed unjudged.",
 }
 
 

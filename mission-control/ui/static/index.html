@@ -212,6 +212,13 @@ h3{font-family:var(--disp);font-size:12px;letter-spacing:.12em;color:var(--faint
 .cc{margin-left:auto;font-family:var(--mono);font-size:12px} .cc.over{color:var(--no);font-weight:700}
 .verch{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
 .verch.pass{color:#04121f;background:var(--go)} .verch.held{color:#fff;background:var(--no)}
+.tier{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:6px;border:1px solid}
+.tier.t-deep{color:var(--gold);border-color:rgba(255,210,74,.5);background:rgba(255,210,74,.08)}
+.tier.t-standard{color:var(--cyan);border-color:rgba(63,224,255,.4);background:rgba(63,224,255,.07)}
+.tier.t-lexical{color:var(--faint);border-color:var(--hair)}
+.covers{margin-top:6px;display:flex;gap:5px;flex-wrap:wrap}
+.covers .cc-chip{font-family:var(--mono);font-size:9.5px;color:var(--dim);border:1px solid var(--hair);border-radius:5px;padding:1px 6px}
+.covers::before{content:"votes on:";font-family:var(--mono);font-size:9.5px;color:var(--faint);margin-right:2px}
 .rephead{padding:12px 18px;color:#7c8b9a;font-size:13px;border-bottom:1px solid var(--hair)}
 .reply{opacity:0;transform:translateY(10px);transition:.45s} .reply.in{opacity:1;transform:none}
 .reply.held{background:rgba(255,93,115,.04)}
@@ -465,10 +472,13 @@ async function streamReplies(d,judges){const feed=$('#feed');if(!feed)return;
   for(const j of judges){const v=vendorOf(j.name);
     if(anim){const t=document.createElement('div');t.className='typing';t.innerHTML=`<i></i><i></i><i></i> ${esc(j.name)} is replying…`;feed.appendChild(t);await sleep(620);t.remove();}
     const el=document.createElement('div');el.className='reply'+(j.pass?'':' held');
+    const tier=j.profile||'deep';
+    const covers=(j.covers||[]).length?`<div class="covers">${j.covers.map(c=>`<span class="cc-chip">${esc(c)}</span>`).join('')}</div>`:'';
     el.innerHTML=`<div class="xrow"><div class="av ${v}">${esc(initials(j.name))}</div><div style="flex:1">
       <div class="who2"><span class="dn">${esc(j.name)}</span><span class="vf">✔</span><span class="hd">${esc(handleOf(j.name))} · now</span>
+      <span class="tier t-${tier}" title="capability tier">${tier}</span>
       <span class="verch ${j.pass?'pass':'held'}">${j.pass?'✓ approves':'✗ holds'}</span></div>
-      <div class="xbody">${esc(j.comment||'')}</div></div></div>`;
+      <div class="xbody">${esc(j.comment||'')}</div>${covers}</div></div>`;
     feed.appendChild(el);requestAnimationFrame(()=>el.classList.add('in'));if(anim)await sleep(240);else el.classList.add('in');}
 }
 

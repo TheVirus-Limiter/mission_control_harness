@@ -44,9 +44,22 @@ guardrails:
   recipient_allowlist: []
 
 rubric_criteria:
+  - banned_claims
   - clarity
   - on_brand
   - no_unsupported_claims
+  - medical_claim_risk
+
+# Capability tier required to vote on each criterion (lexical < standard < deep).
+# A mechanical lexical check (banned phrase) anyone can judge; nuanced judgment
+# (unsupported / medical-risk claims) is reserved for capable 'deep' models.
+# Every criterion still has >= 1 eligible judge, or the gate fails closed.
+criterion_profiles:
+  banned_claims: lexical
+  clarity: standard
+  on_brand: standard
+  no_unsupported_claims: deep
+  medical_claim_risk: deep
 
 stages:
   - name: research

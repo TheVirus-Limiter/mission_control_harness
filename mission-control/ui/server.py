@@ -244,26 +244,27 @@ def _panel_view(st: Store, run_id: str) -> dict:
     held_by_judge: dict[str, list] = {}
     for h in out.get("held", []):
         held_by_judge.setdefault(h["judge"], []).append(h)
+    profiles = out.get("judge_profiles", {})
+    assigned = out.get("assigned", {})
     judges = []
     for name, verdict in out.get("verdicts", {}).items():
         holds = held_by_judge.get(name, [])
-        passed = not holds
         comment = (verdict.get("comment") or "").strip()
         if holds:
             reason = "; ".join(f"{h['criterion']}: {h['reason']}" for h in holds)
-            if not comment:
-                comment = "Holding this — " + reason
             judges.append({"name": name, "verdict": "HELD", "pass": False, "reason": reason,
-                           "comment": comment, "criteria": verdict.get("criteria", {})})
+                           "comment": comment or ("Holding this — " + reason),
+                           "criteria": verdict.get("criteria", {}),
+                           "profile": profiles.get(name, "deep"), "covers": assigned.get(name, [])})
         else:
-            if not comment:
-                comment = "Looks good to me — clear and on-brand."
             judges.append({"name": name, "verdict": "PASS", "pass": True,
-                           "reason": "all criteria passed", "comment": comment,
-                           "criteria": verdict.get("criteria", {})})
+                           "reason": "all assigned criteria passed",
+                           "comment": comment or "Looks good to me — clear and on-brand.",
+                           "criteria": verdict.get("criteria", {}),
+                           "profile": profiles.get(name, "deep"), "covers": assigned.get(name, [])})
     return {"present": True, "eligible": out.get("eligible"),
             "judges": judges, "held": out.get("held", []),
-            "rubric": out.get("rubric", [])}
+            "rubric": out.get("rubric", []), "criteria_outcomes": out.get("criteria_outcomes", {})}
 
 
 def _post_view(st: Store, run_id: str, events) -> dict:

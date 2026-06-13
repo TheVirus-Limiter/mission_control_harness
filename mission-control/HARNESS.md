@@ -180,6 +180,30 @@ diluted by unrelated approvals, and it invents a number that means nothing. Bina
 pass/fail per named criterion with a quoted reason, combined by consent, is
 auditable end to end.
 
+### Capability-tier strictness profiles
+
+Equal veto across mixed-capability models adds noise: a tiny fast model giving a
+nuanced "is this an unsupported claim?" verdict is unreliable, while it is
+perfectly reliable on a mechanical "does this contain a banned phrase?" check.
+So each judge has a **tier** — `lexical` < `standard` < `deep` (declared in
+`models/judges.py`) — and each rubric criterion declares a **`min_profile`**
+(declared in the mission YAML). A judge votes on a criterion **iff its tier ≥ the
+criterion's required tier**. Small models judge only the cheap lexical checks;
+nuanced criteria are reserved for capable models. A judge is literally only
+*asked* about the criteria it is assigned, and `meta_check` audits it against only
+those — so it is never faulted for omitting a criterion it was never given.
+
+Consent is preserved: a criterion passes iff **every judge that voted on it**
+passed it (unanimous *within its eligible voters*), and the post is eligible iff
+every criterion passes. Still no averaging. Crucially, the gate **fails closed**:
+if any criterion ends up with **zero** eligible voters that is a `CONFIG_ERROR`
+and the run escalates — a safety-critical criterion must never go unjudged because
+of tiering. This raises signal without weakening the fail-closed guarantee and
+without introducing any average. (Backward-compatible: a judge with no profile
+defaults to `deep`, a criterion with no `min_profile` defaults to `lexical`, so a
+mission that declares neither behaves exactly as before — everyone votes on
+everything.)
+
 ---
 
 ## 7. Three-way failure routing & fail-closed

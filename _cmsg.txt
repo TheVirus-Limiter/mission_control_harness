@@ -1,0 +1,32 @@
+capability-tier strictness profiles + diverse 6-lineage panel; X posting verified
+
+Panel roster (models/judges.py): replaced the llama-heavy roster with SIX DISTINCT
+LINEAGES — gpt-oss-120b (OpenAI), qwen3-next-80b (Qwen), glm-5.1 (Zhipu), mixtral
+(Mistral), phi-4-mini (Microsoft), llama-4-maverick (Meta) — plus distinct spares
+(gpt-oss-20b, nemotron, llama-3.1-70b) and hosted Claude/GPT for the pipeline.
+Default jury = the diverse six. Panel review already runs concurrently.
+
+Strictness profiles (the spec, implemented exactly):
+- tiers lexical(0) < standard(1) < deep(2); each judge has a profile, each rubric
+  criterion declares min_profile in the mission YAML.
+- a judge votes on a criterion iff judge.tier >= criterion.min_tier. Each judge is
+  ONLY asked about its assigned criteria; meta_check audits only those (never
+  faulted for omitting an unassigned criterion).
+- consent is unanimous WITHIN each criterion's eligible voters; eligible iff every
+  criterion passes. No averaging.
+- FAIL CLOSED: a criterion with zero eligible voters -> CONFIG_ERROR + escalate
+  (new AlarmType). A safety-critical criterion never goes unjudged.
+- backward compatible: no profile -> deep; no min_profile -> lexical (everyone
+  votes; prior behavior unchanged). lumora.yaml declares the tiered rubric.
+- persisted per-criterion voter outcomes + judge profiles; dashboard shows each
+  judge's tier badge (deep/standard/lexical) and the criteria it votes on, on the
+  fake-X reviewer cards.
+
+X posting now VERIFIED working (authenticated as @lumorasleep) after the user
+enabled User Authentication + Read/Write. Still gated behind the interactive human
+hold (--yes/dashboard stay dry-run).
+
+tests: 69 green (5 new tier tests: assigned-only veto, lexical scoping, zero-voter
+fail-closed, meta_check-only-assigned, backward compat). HARNESS.md updated.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

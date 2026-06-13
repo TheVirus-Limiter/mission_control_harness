@@ -22,6 +22,16 @@ NIM_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 OLLAMA_DEFAULT = "http://localhost:11434/v1"
 
 
+# Capability tiers. A judge only votes on a criterion whose required tier is
+# <= the judge's tier, so small models judge only the cheap lexical checks and
+# nuanced criteria are reserved for capable models.
+TIERS = {"lexical": 0, "standard": 1, "deep": 2}
+
+
+def tier_rank(profile: Optional[str]) -> int:
+    return TIERS.get(profile or "deep", 2)
+
+
 @dataclass(frozen=True)
 class JudgeConfig:
     name: str          # display name (reviewer card + timeline)
@@ -29,43 +39,42 @@ class JudgeConfig:
     model: str
     env_key: str
     base_url: Optional[str] = None
-    strictness: str = "normal"   # "strict" | "normal" | "lenient"
+    strictness: str = "normal"   # posture: "strict" | "normal" | "lenient"
     key: str = ""      # short cli/ui key for --preset
-    vendor: str = ""   # for UI grouping/icon: anthropic/openai/meta/mistral/...
+    vendor: str = ""   # for UI grouping/icon
+    profile: str = "deep"  # capability tier: "lexical" | "standard" | "deep"
 
 
-# The declared barrage. Anthropic + OpenAI + a verified spread of NVIDIA NIM
-# models (Meta Llama, Mistral, Microsoft Phi, OpenAI gpt-oss, Qwen).
-# Every NVIDIA model id below was latency-tested live (avg < ~5s, reliable);
-# slow/laggy/404 ids (Llama-3.3-70B, Nemotron-Super-49B, Mistral-Medium,
-# DeepSeek-V4 reasoning, etc.) were dropped so the panel stays snappy.
+# The panel: SIX DISTINCT MODEL LINEAGES (a bunch of llamas that agree is noise).
+# Each verified fast/reliable live; each tagged with a capability tier. Spares
+# follow (distinct or fast fallbacks); the hosted models stay available for the
+# pipeline (--preset) and as deep judges if MAX_JUDGES is raised.
 PRESETS: list[JudgeConfig] = [
-    JudgeConfig("Claude Haiku 4.5", "anthropic", "claude-haiku-4-5-20251001",
-                "ANTHROPIC_API_KEY", None, "strict", "claude", "anthropic"),
-    JudgeConfig("GPT-4o mini", "openai", "gpt-4o-mini",
-                "OPENAI_API_KEY", None, "normal", "gpt", "openai"),
-    JudgeConfig("Llama 3.1 70B", "nvidia", "meta/llama-3.1-70b-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "llama70", "meta"),
-    JudgeConfig("Llama 3.1 8B", "nvidia", "meta/llama-3.1-8b-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama8", "meta"),
-    JudgeConfig("Llama 3.2 3B", "nvidia", "meta/llama-3.2-3b-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama3b", "meta"),
-    JudgeConfig("Llama 4 Maverick", "nvidia", "meta/llama-4-maverick-17b-128e-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "llama4", "meta"),
-    JudgeConfig("Mixtral 8x7B", "nvidia", "mistralai/mixtral-8x7b-instruct-v0.1",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "mixtral", "mistral"),
-    JudgeConfig("Phi-4 mini", "nvidia", "microsoft/phi-4-mini-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "phi4", "microsoft"),
-    JudgeConfig("GPT-OSS 20B", "nvidia", "openai/gpt-oss-20b",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "gptoss", "openai"),
+    # --- the diverse six (one per lineage) ---
     JudgeConfig("GPT-OSS 120B", "nvidia", "openai/gpt-oss-120b",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "gptoss120", "openai"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "gptoss120", "openai", "deep"),
     JudgeConfig("Qwen3 Next 80B", "nvidia", "qwen/qwen3-next-80b-a3b-instruct",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "qwen3", "qwen"),
-    JudgeConfig("Nemotron 3 Super 120B", "nvidia", "nvidia/nemotron-3-super-120b-a12b",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "nemotron", "nvidia"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "strict", "qwen3", "qwen", "deep"),
     JudgeConfig("GLM 5.1", "nvidia", "z-ai/glm-5.1",
-                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "glm", "zai"),
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "glm", "zai", "deep"),
+    JudgeConfig("Mixtral 8x7B", "nvidia", "mistralai/mixtral-8x7b-instruct-v0.1",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "mixtral", "mistral", "standard"),
+    JudgeConfig("Phi-4 mini", "nvidia", "microsoft/phi-4-mini-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "phi4", "microsoft", "lexical"),
+    JudgeConfig("Llama 4 Maverick", "nvidia", "meta/llama-4-maverick-17b-128e-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "lenient", "llama4", "meta", "lexical"),
+    # --- spares (kept in config; distinct or fast fallbacks) ---
+    JudgeConfig("GPT-OSS 20B", "nvidia", "openai/gpt-oss-20b",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "gptoss", "openai", "standard"),
+    JudgeConfig("Nemotron 3 Super 120B", "nvidia", "nvidia/nemotron-3-super-120b-a12b",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "nemotron", "nvidia", "deep"),
+    JudgeConfig("Llama 3.1 70B", "nvidia", "meta/llama-3.1-70b-instruct",
+                "NVIDIA_API_KEY", NIM_ENDPOINT, "normal", "llama70", "meta", "standard"),
+    # --- hosted: pipeline presets + deep judges if MAX_JUDGES is raised ---
+    JudgeConfig("Claude Haiku 4.5", "anthropic", "claude-haiku-4-5-20251001",
+                "ANTHROPIC_API_KEY", None, "strict", "claude", "anthropic", "deep"),
+    JudgeConfig("GPT-4o mini", "openai", "gpt-4o-mini",
+                "OPENAI_API_KEY", None, "normal", "gpt", "openai", "deep"),
 ]
 
 # Back-compat alias: the panel IS the preset roster.
@@ -112,13 +121,13 @@ def build_real_judges(faulty_grader: bool = False) -> list:
         roster += _ollama_judges()
     judges = [RealJudge(cfg) for cfg in roster if os.environ.get(cfg.env_key)]
 
-    limit = 9
+    limit = 6   # the six distinct lineages; raise MAX_JUDGES to add the spares/hosted
     cap = os.environ.get("MAX_JUDGES")
     if cap:
         try:
             limit = max(1, int(cap))
         except ValueError:
-            limit = 9
+            limit = 6
     judges = judges[:limit]
 
     if faulty_grader and judges:

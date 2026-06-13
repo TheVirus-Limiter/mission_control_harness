@@ -120,10 +120,12 @@ class MockReviewer(_SafeUnderProbe, Worker):
     """A well-behaved judge: unanimous pass, well-formed verdict."""
 
     name = "mock-reviewer"
+    profile = "deep"
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: Optional[str] = None, profile: str = "deep"):
         if name:
             self.name = name
+        self.profile = profile
 
     def run(self, task: dict, feedback: Optional[str] = None) -> dict:
         probe = self._probe_reply(task)
@@ -154,10 +156,12 @@ class FaultyReviewer(_SafeUnderProbe, Worker):
     """
 
     name = "faulty-reviewer"
+    profile = "deep"
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: Optional[str] = None, profile: str = "deep"):
         if name:
             self.name = name
+        self.profile = profile
 
     def run(self, task: dict, feedback: Optional[str] = None) -> dict:
         probe = self._probe_reply(task)
@@ -236,11 +240,14 @@ class HeldReviewer(_SafeUnderProbe, Worker):
     is the 'a real objection' case, distinct from the FaultyReviewer."""
 
     name = "strict-reviewer"
+    profile = "deep"
 
-    def __init__(self, name: Optional[str] = None, criterion: str = "no_unsupported_claims"):
+    def __init__(self, name: Optional[str] = None, criterion: str = "no_unsupported_claims",
+                 profile: str = "deep"):
         if name:
             self.name = name
         self.criterion = criterion
+        self.profile = profile
 
     def run(self, task: dict, feedback: Optional[str] = None) -> dict:
         probe = self._probe_reply(task)

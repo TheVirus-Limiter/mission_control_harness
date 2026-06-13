@@ -144,6 +144,10 @@ class Harness:
         self.handle = self.input.get("handle", "@yourbrand")
         self.stage_by_name = {s["name"]: s for s in self.mission.get("stages", [])}
         self.rubric = self.mission.get("rubric_criteria", [])
+        # criterion -> minimum capability tier allowed to vote (declared config).
+        from models.judges import tier_rank
+        self.criterion_tiers = {c: tier_rank(p) for c, p
+                                in (self.mission.get("criterion_profiles", {}) or {}).items()}
         admission_cfg = self.mission.get("admission", {}) or {}
         self.proving_ground = ProvingGround(
             store, self.guardrails, policy=admission_cfg.get("policy", "all_survived"))
@@ -247,25 +251,25 @@ class Harness:
                 "rehearsal"))
 
         if self.full_panel:
-            # Mirror the full declared roster (Anthropic + OpenAI + the whole
-            # NVIDIA NIM bunch) as deterministic mock judges, so the panel is
-            # visible without any API key. Each is a real unanimous-consent
-            # reviewer; the "(mock)" label keeps it honest.
-            from models.judges import roster_names
+            # Mirror the full declared roster as deterministic mock judges (with
+            # their real capability tiers), so tiering is visible without a key.
+            from models.judges import PRESETS
 
-            judges: list[Worker] = [MockReviewer(n + " (mock)") for n in roster_names()]
+            judges: list[Worker] = [MockReviewer(p.name + " (mock)", profile=p.profile) for p in PRESETS]
         else:
+            # A small tiered mock panel: one deep, one standard, one lexical.
             judges = [
-                MockReviewer("anthropic-claude (mock)"),
-                MockReviewer("openai-gpt (mock)"),
-                MockReviewer("nvidia-nim (mock)"),
+                MockReviewer("anthropic-claude (mock)", profile="deep"),
+                MockReviewer("mixtral (mock)", profile="standard"),
+                MockReviewer("phi-4 (mock)", profile="lexical"),
             ]
         if self.faulty_grader:
-            # one judge hallucinates a citation -> meta_check catches it.
-            judges[1] = FaultyReviewer(judges[1].name + " [FAULTY]")
+            # one judge hallucinates a citation -> meta_check catches it. Deep so
+            # it votes on (and faults) the full rubric regardless of tiers.
+            judges[1] = FaultyReviewer(judges[1].name + " [FAULTY]", profile="deep")
         if self.block_demo:
-            # one judge legitimately holds an unsupported-claim criterion.
-            judges[1] = HeldReviewer(judges[1].name + " [strict]")
+            # one deep judge legitimately holds an unsupported-claim criterion.
+            judges[1] = HeldReviewer(judges[1].name + " [strict]", profile="deep")
         return judges
 
     # -- task + ctx assembly ------------------------------------------------
@@ -418,7 +422,7 @@ class Harness:
 
         rehearsal = Rehearsal(self.store, self.guardrails, self.rubric,
                               reviewer_retries=int(self.budgets.get("reviewer_retries", 2)),
-                              handle=self.handle)
+                              handle=self.handle, criterion_tiers=self.criterion_tiers)
         budget = int(self.budgets.get("writer_revisions", 1))
         held_revisions = 0
 
